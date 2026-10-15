@@ -12,6 +12,5 @@ const getEnv = (key: string): string => {
 
 const PORT = getEnv("PORT");
 const BALE_TOKEN = getEnv("BALE_TOKEN");
-const GREETING_TEXT = getEnv("GREETING_TEXT");
 
-export { BALE_TOKEN, PORT, GREETING_TEXT };
+export { BALE_TOKEN, PORT };
