@@ -1,4 +1,6 @@
-const OLLAMA_URL = "http://localhost:11434/api/chat";
+import { LLM_URL } from "./utils/env.js";
+import type { ChatHistoryMessage } from "./db/messages.js";
+
 const MODEL = process.env.OLLAMA_MODEL || "qwen3.5:9b";
 
 interface OllamaResponse {
@@ -9,8 +11,8 @@ interface OllamaResponse {
   done: boolean;
 }
 
-export async function askAI(question: string): Promise<string> {
-  const response = await fetch(OLLAMA_URL, {
+export async function askAI(history: ChatHistoryMessage[]): Promise<string> {
+  const response = await fetch(LLM_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -23,10 +25,7 @@ export async function askAI(question: string): Promise<string> {
           content:
             "تو یک دستیار هوشمند تحصیلی هستی. به سؤالات دانشجویان دقیق، واضح و دوستانه پاسخ بده. در صورت امکان، به زبان خود دانشجو پاسخ بده.",
         },
-        {
-          role: "user",
-          content: question,
-        },
+        ...history,
       ],
       stream: false,
     }),
