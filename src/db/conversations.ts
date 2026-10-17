@@ -5,34 +5,19 @@ export async function findOrCreateConversation(
 ): Promise<number> {
   const result = await pool.query<{ id: number }>(
     `
-      SELECT id
-      FROM conversations
-      WHERE user_id = $1
-      ORDER BY id
-      LIMIT 1
-    `,
-    [userId],
-  );
-
-  const existingConversation = result.rows[0];
-
-  if (existingConversation) {
-    return existingConversation.id;
-  }
-
-  const created = await pool.query<{ id: number }>(
-    `
       INSERT INTO conversations (user_id)
       VALUES ($1)
+      ON CONFLICT (user_id) DO UPDATE
+      SET user_id = EXCLUDED.user_id
       RETURNING id
     `,
     [userId],
   );
 
-  const conversation = created.rows[0];
+  const conversation = result.rows[0];
 
   if (!conversation) {
-    throw new Error("Failed to create conversation");
+    throw new Error("Failed to create or retrieve conversation");
   }
 
   return conversation.id;

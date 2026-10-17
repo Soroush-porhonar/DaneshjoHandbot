@@ -2,7 +2,7 @@ import "dotenv/config";
 import express from "express";
 import { getUpdates } from "./bale.js";
 import { handleMessage } from "./handlers.js";
-
+import { isUpdateProcessed, markUpdateProcessed } from "./db/updates.js";
 const app = express();
 const port = Number(process.env.PORT) || 3000;
 
@@ -25,15 +25,33 @@ async function main(): Promise<void> {
   while (true) {
     try {
       const updates = await getUpdates(offset);
-      console.dir(updates, { depth: null });
+
       for (const update of updates) {
-        offset = update.update_id + 1;
+        console.log("Received update:", update.update_id);
 
-        const message = update.message;
+        try {
+          if (await isUpdateProcessed(update.update_id)) {
+            console.log("Skipping already processed update:", update.update_id);
+            offset = update.update_id + 1;
+            continue;
+          }
 
-        if (!message?.text) continue;
+          const message = update.message;
 
-        await handleMessage(message.chat.id, message.text);
+          if (message?.text) {
+            await handleMessage(message.chat.id, message.text);
+          }
+
+          // Record completion only after the handler returns.
+          await markUpdateProcessed(update.update_id);
+
+          offset = update.update_id + 1;
+        } catch (error: unknown) {
+          console.error("Failed to process update:", update.update_id, error);
+
+          // Stop this batch here. The next poll can retry this update.
+          break;
+        }
       }
     } catch (error) {
       console.error("Error receiving or handling messages:", error);

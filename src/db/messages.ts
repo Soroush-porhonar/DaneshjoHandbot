@@ -9,8 +9,14 @@ export async function saveMessage(
 ): Promise<void> {
   await pool.query(
     `
-      INSERT INTO messages (conversation_id, role, content)
-      VALUES ($1, $2, $3)
+      WITH inserted AS (
+        INSERT INTO messages (conversation_id, role, content)
+        VALUES ($1, $2, $3)
+        RETURNING conversation_id
+      )
+      UPDATE conversations
+      SET updated_at = NOW()
+      WHERE id = (SELECT conversation_id FROM inserted)
     `,
     [conversationId, role, content],
   );

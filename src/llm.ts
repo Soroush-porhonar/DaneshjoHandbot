@@ -17,6 +17,7 @@ export async function askAI(history: ChatHistoryMessage[]): Promise<string> {
     headers: {
       "Content-Type": "application/json",
     },
+    signal: AbortSignal.timeout(700_000),
     body: JSON.stringify({
       model: MODEL,
       messages: [
