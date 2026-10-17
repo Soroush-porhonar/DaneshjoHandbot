@@ -41,6 +41,7 @@ export async function ingestPdf(
 
       embeddedChunks.push({
         chunkIndex: chunk.chunkIndex,
+        pageNumber: chunk.pageNumber,
         content: chunk.content,
         embedding,
       });
@@ -56,12 +57,16 @@ export async function ingestPdf(
         const vector = `[${chunk.embedding.join(",")}]`;
 
         await client.query(
-          `
-            INSERT INTO document_chunks
-              (document_id, chunk_index, content, embedding)
-            VALUES ($1, $2, $3, $4::vector)
-          `,
-          [documentId, chunk.chunkIndex, chunk.content, vector],
+          `INSERT INTO document_chunks
+     (document_id, chunk_index, page_number, content, embedding)
+   VALUES ($1, $2, $3, $4, $5::vector)`,
+          [
+            documentId,
+            chunk.chunkIndex,
+            chunk.pageNumber,
+            chunk.content,
+            vector,
+          ],
         );
       }
 

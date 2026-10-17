@@ -4,6 +4,7 @@ import { generateEmbedding } from "./embeddings.js";
 export interface RetrievedChunk {
   documentId: number;
   filename: string;
+  pageNumber: number;
   content: string;
   distance: number;
 }
@@ -21,6 +22,7 @@ export async function retrieveRelevantChunks(
     `SELECT
        dc.document_id AS "documentId",
        d.filename,
+       dc.page_number AS "pageNumber",
        dc.content,
        dc.embedding <=> $2::vector AS distance
      FROM document_chunks dc

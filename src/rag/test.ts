@@ -4,7 +4,7 @@ import { retrieveRelevantChunks } from "./retrieve.js";
 
 async function main() {
   const chatId = "2059726704";
-  const documentId = 2;
+  const documentId = 3;
 
   const question =
     "معماری پایگاه داده چیست و چه مدل‌هایی برای پایگاه داده وجود دارد؟";
@@ -39,6 +39,7 @@ async function main() {
       console.log("Filename:", chunk.filename);
       console.log("Cosine distance:", chunk.distance.toFixed(4));
       console.log("Content:\n", chunk.content);
+      console.log("Page number:", chunk.pageNumber);
     }
   } catch (error: unknown) {
     console.error("Retrieval test failed:", error);
