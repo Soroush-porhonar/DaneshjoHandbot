@@ -1,23 +1,54 @@
 import { sendMessage } from "./bale.js";
 import { START_TEXT, HELP_TEXT, ABOUT_TEXT } from "./text.js";
 import { askAI } from "./llm.js";
+import { findOrCreateUser } from "./db/users.js";
+import { findOrCreateConversation } from "./db/conversations.js";
+import { getRecentMessages, saveMessage } from "./db/messages.js";
 
 export async function handleMessage(
   chatId: number,
   text: string,
-): Promise<void> {
+): Promise<boolean> {
+  let conversationId: number;
+  let answer: string;
+
+  try {
+    const user = await findOrCreateUser(String(chatId));
+    conversationId = await findOrCreateConversation(user.id);
+    await saveMessage(conversationId, "user", text);
+  } catch (error: unknown) {
+    console.error("Failed to save incoming message:", error);
+    return false;
+  }
+
   try {
     if (text === "/start") {
-      await sendMessage(chatId, START_TEXT);
+      answer = START_TEXT;
     } else if (text === "/help") {
-      await sendMessage(chatId, HELP_TEXT);
+      answer = HELP_TEXT;
     } else if (text === "/about") {
-      await sendMessage(chatId, ABOUT_TEXT);
+      answer = ABOUT_TEXT;
     } else {
-      const answer = await askAI(text);
-      await sendMessage(chatId, answer);
+      const history = await getRecentMessages(conversationId, 10);
+      answer = await askAI(history);
     }
   } catch (error: unknown) {
-    console.error("Failed to handle message:", error);
+    console.error("Failed to generate answer:", error);
+    return false;
+  }
+
+  try {
+    await saveMessage(conversationId, "assistant", answer);
+  } catch (error: unknown) {
+    console.error("Failed to save assistant response:", error);
+    return false;
+  }
+
+  try {
+    await sendMessage(chatId, answer);
+    return true;
+  } catch (error: unknown) {
+    console.error("Failed to send Bale message:", error);
+    return false;
   }
 }

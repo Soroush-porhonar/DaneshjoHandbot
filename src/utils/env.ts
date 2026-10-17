@@ -12,5 +12,7 @@ const getEnv = (key: string): string => {
 
 const PORT = getEnv("PORT");
 const BALE_TOKEN = getEnv("BALE_TOKEN");
+const LLM_URL = getEnv("LLM_URL");
+const DATABASE_URL = getEnv("DATABASE_URL");
 
-export { BALE_TOKEN, PORT };
+export { BALE_TOKEN, PORT, LLM_URL, DATABASE_URL };
