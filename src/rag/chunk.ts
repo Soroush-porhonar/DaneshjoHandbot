@@ -1,5 +1,6 @@
 export interface TextChunk {
   chunkIndex: number;
+  pageNumber: number;
   content: string;
 }
 
@@ -20,28 +21,31 @@ export function chunkText(
 
   if (!normalizedText) return [];
 
-  // Split the extracted PDF text into individual pages.
-  const pages = normalizedText.split(/(?=--\s*\d+\s+of\s+\d+\s*--)/g);
+  const pages = normalizedText
+    .split(/(?=--\s*\d+\s+of\s+\d+\s*--)/g)
+    .filter((page) => /^--\s*\d+\s+of\s+\d+\s*--/.test(page.trim()));
 
   const chunks: TextChunk[] = [];
 
   for (const page of pages) {
+    const marker = page.match(/^--\s*(\d+)\s+of\s+\d+\s*--/);
+    const pageNumber = marker ? Number(marker[1]) : 1;
+
     const cleanedPage = page
       .replace(/^--\s*\d+\s+of\s+\d+\s*--\s*/g, "")
       .trim();
 
     if (!cleanedPage) continue;
 
-    // Keep short pages together.
     if (cleanedPage.length <= chunkSize) {
       chunks.push({
         chunkIndex: chunks.length,
+        pageNumber,
         content: cleanedPage,
       });
       continue;
     }
 
-    // Split long pages into smaller overlapping chunks.
     let start = 0;
 
     while (start < cleanedPage.length) {
@@ -67,6 +71,7 @@ export function chunkText(
       if (content) {
         chunks.push({
           chunkIndex: chunks.length,
+          pageNumber,
           content,
         });
       }
