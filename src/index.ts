@@ -3,6 +3,7 @@ import express from "express";
 import { getUpdates } from "./bale.js";
 import { handleMessage } from "./handlers.js";
 import { isUpdateProcessed, markUpdateProcessed } from "./db/updates.js";
+
 const app = express();
 const port = Number(process.env.PORT) || 3000;
 
@@ -39,7 +40,15 @@ async function main(): Promise<void> {
           const message = update.message;
 
           if (message?.text) {
-            await handleMessage(message.chat.id, message.text);
+            const succeeded = await handleMessage(
+              message.chat.id,
+              message.text,
+            );
+
+            if (!succeeded) {
+              console.error("Update handling failed:", update.update_id);
+              break;
+            }
           }
 
           // Record completion only after the handler returns.

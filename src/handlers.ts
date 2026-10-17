@@ -8,8 +8,9 @@ import { getRecentMessages, saveMessage } from "./db/messages.js";
 export async function handleMessage(
   chatId: number,
   text: string,
-): Promise<void> {
+): Promise<boolean> {
   let conversationId: number;
+  let answer: string;
 
   try {
     const user = await findOrCreateUser(String(chatId));
@@ -17,57 +18,37 @@ export async function handleMessage(
     await saveMessage(conversationId, "user", text);
   } catch (error: unknown) {
     console.error("Failed to save incoming message:", error);
-
-    try {
-      await sendMessage(
-        chatId,
-        "مشکلی در ذخیره پیام شما پیش آمد. لطفاً دوباره تلاش کنید.",
-      );
-    } catch (sendError: unknown) {
-      console.error("Failed to send database error message:", sendError);
-    }
-
-    return;
+    return false;
   }
 
-  let answer: string;
-
-  if (text === "/start") {
-    answer = START_TEXT;
-  } else if (text === "/help") {
-    answer = HELP_TEXT;
-  } else if (text === "/about") {
-    answer = ABOUT_TEXT;
-  } else {
-    try {
+  try {
+    if (text === "/start") {
+      answer = START_TEXT;
+    } else if (text === "/help") {
+      answer = HELP_TEXT;
+    } else if (text === "/about") {
+      answer = ABOUT_TEXT;
+    } else {
       const history = await getRecentMessages(conversationId, 10);
       answer = await askAI(history);
-    } catch (error: unknown) {
-      console.error("AI request failed:", error);
-
-      try {
-        await sendMessage(
-          chatId,
-          "متأسفانه در حال حاضر امکان پاسخ‌گویی وجود ندارد. لطفاً کمی بعد دوباره تلاش کنید.",
-        );
-      } catch (sendError: unknown) {
-        console.error("Failed to send AI error message:", sendError);
-      }
-
-      return;
     }
+  } catch (error: unknown) {
+    console.error("Failed to generate answer:", error);
+    return false;
   }
 
   try {
     await saveMessage(conversationId, "assistant", answer);
   } catch (error: unknown) {
     console.error("Failed to save assistant response:", error);
-    // Still attempt to deliver the generated response to the user.
+    return false;
   }
 
   try {
     await sendMessage(chatId, answer);
+    return true;
   } catch (error: unknown) {
     console.error("Failed to send Bale message:", error);
+    return false;
   }
 }
