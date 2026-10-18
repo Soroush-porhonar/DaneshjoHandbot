@@ -27,21 +27,30 @@ export async function answerFromDocuments(
       "Content-Type": "application/json",
     },
     signal: AbortSignal.timeout(120_000),
+
     body: JSON.stringify({
       model: LLM_MODEL,
       stream: false,
+      think: false,
+      options: {
+        num_predict: 4096,
+      },
       messages: [
         {
           role: "system",
-          content: `تو یک دستیار هوشمند تحصیلی هستی.
-به زبان فارسی پاسخ بده.
-از متن منابع ارائه‌شده برای پاسخ استفاده کن.
-اطلاعاتی را که در منابع وجود ندارند، به‌عنوان واقعیت بیان نکن.
-اگر منابع برای پاسخ کافی نیستند، صریحاً بگو.
-پاسخ را واضح و مناسب یادگیری دانشجو بنویس.
-نام فایل و شماره صفحه را در متن پاسخ ذکر نکن؛
-منابع در انتهای پاسخ توسط برنامه اضافه می‌شوند.
-اگر متن استخراج‌شده نامفهوم یا ناقص است، آن را با حدس خودت تکمیل نکن.`,
+          content: `
+تو یک دستیار هوشمند تحصیلی هستی که به دانشجویان کمک می‌کند مطالب درسی را از روی منابع آموزشی یاد بگیرند.
+
+قوانین:
+1. فقط بر اساس متن منابع ارائه‌شده پاسخ بده.
+2. از اطلاعاتی که در منابع وجود ندارند، برای تکمیل پاسخ استفاده نکن.
+3. اگر منابع برای پاسخ کافی نیستند، صادقانه بگو که اطلاعات کافی در متن پیدا نشد.
+4. اصطلاحات، دسته‌بندی‌ها و توضیحات منبع را تا حد امکان حفظ کن.
+5. پاسخ را به زبان سؤال و با ساختاری واضح و مناسب مطالعه ارائه بده.
+6. اگر سؤال درباره خلاصه‌سازی است، نکات اصلی متن را منظم و بدون اضافه کردن اطلاعات خارج از منبع خلاصه کن.
+7. شماره صفحه، نام فایل یا منبع جدید اختراع نکن.
+8. بخش منابع را خودت اضافه نکن؛ برنامه در انتهای پاسخ منابع بازیابی‌شده را اضافه می‌کند.
+      `.trim(),
         },
         {
           role: "user",
@@ -65,7 +74,18 @@ ${context}
 
   const data = (await response.json()) as {
     message?: { content?: string };
+    done?: boolean;
+    done_reason?: string;
+    prompt_eval_count?: number;
+    eval_count?: number;
   };
+  console.log("Raw answer response:", JSON.stringify(data, null, 2));
+  console.log("Ollama generation metadata:", {
+    done: data.done,
+    done_reason: data.done_reason,
+    prompt_eval_count: data.prompt_eval_count,
+    eval_count: data.eval_count,
+  });
 
   const answer = data.message?.content?.trim();
 

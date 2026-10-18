@@ -38,7 +38,7 @@ async function main() {
       console.log("Document ID:", chunk.documentId);
       console.log("Filename:", chunk.filename);
       console.log("Cosine distance:", chunk.distance.toFixed(4));
-      console.log("Content:\n", chunk.content);
+      console.log("Preview:", chunk.content.slice(0, 150).replace(/\n/g, " "));
       console.log("Page number:", chunk.pageNumber);
     }
   } catch (error: unknown) {

@@ -35,5 +35,9 @@ export async function retrieveRelevantChunks(
     [userId, vector, limit, documentId ?? null],
   );
 
-  return result.rows;
+  const MAX_COSINE_DISTANCE = 0.55;
+
+  return result.rows.filter(
+    (chunk) => Number(chunk.distance) <= MAX_COSINE_DISTANCE,
+  );
 }
