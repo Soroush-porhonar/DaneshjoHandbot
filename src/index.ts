@@ -5,7 +5,7 @@ import { handleMessage } from "./handlers.js";
 import { isUpdateProcessed, markUpdateProcessed } from "./db/updates.js";
 
 const app = express();
-const port = Number(process.env.PORT) || 3000;
+const port = Number(process.env.PORT);
 
 app.get("/health", (_req, res) => {
   res.json({
