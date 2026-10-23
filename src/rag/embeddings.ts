@@ -1,7 +1,7 @@
+import { EMBEDDING_MODEL } from "../utils/env.js";
+
 const OLLAMA_EMBED_URL =
   process.env.OLLAMA_EMBED_URL ?? "http://localhost:11434/api/embed";
-
-const EMBEDDING_MODEL = "bge-m3";
 
 interface OllamaEmbedResponse {
   embeddings: number[][];
@@ -26,12 +26,25 @@ export async function generateEmbedding(text: string): Promise<number[]> {
     );
   }
 
-  const data = (await response.json()) as OllamaEmbedResponse;
+  let data: OllamaEmbedResponse;
+
+  try {
+    data = (await response.json()) as OllamaEmbedResponse;
+  } catch {
+    throw new Error("Ollama returned an invalid embedding response.");
+  }
+
   const embedding = data.embeddings?.[0];
 
-  if (!embedding || embedding.length !== 1024) {
+  if (
+    !embedding ||
+    embedding.length !== 1024 ||
+    !embedding.every(Number.isFinite)
+  ) {
     throw new Error(
-      `Expected a 1024-dimensional embedding, received ${embedding?.length ?? 0}`,
+      `Invalid embedding: expected 1024 finite values, received ${
+        embedding?.length ?? 0
+      }`,
     );
   }
 

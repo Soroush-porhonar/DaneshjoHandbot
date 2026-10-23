@@ -39,6 +39,12 @@ export async function ingestPdf(
     for (const chunk of chunks) {
       const embedding = await generateEmbedding(chunk.content);
 
+      if (embedding.length !== 1024 || !embedding.every(Number.isFinite)) {
+        throw new Error(
+          `Invalid embedding for chunk ${chunk.chunkIndex}: expected 1024 finite values`,
+        );
+      }
+
       embeddedChunks.push({
         chunkIndex: chunk.chunkIndex,
         pageNumber: chunk.pageNumber,
@@ -81,7 +87,15 @@ export async function ingestPdf(
 
       await client.query("COMMIT");
     } catch (error: unknown) {
-      await client.query("ROLLBACK");
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackError: unknown) {
+        console.error("Failed to roll back document ingestion:", {
+          documentId,
+          error: rollbackError,
+        });
+      }
+
       throw error;
     } finally {
       client.release();

@@ -1,7 +1,7 @@
-import { LLM_URL } from "./utils/env.js";
+import { LLM_MODEL, LLM_URL } from "./utils/env.js";
 import type { ChatHistoryMessage } from "./db/messages.js";
 
-const MODEL = process.env.OLLAMA_MODEL || "qwen3.5:9b";
+const MODEL = LLM_MODEL;
 
 interface OllamaResponse {
   message: {
@@ -43,10 +43,19 @@ export async function askAI(
     );
   }
 
-  const data = (await response.json()) as OllamaResponse;
+  let data: OllamaResponse;
 
-  if (!data.message?.content) {
-    throw new Error("Ollama returned an empty response.");
+  try {
+    data = (await response.json()) as OllamaResponse;
+  } catch {
+    throw new Error("Ollama returned an invalid JSON response.");
+  }
+
+  if (
+    typeof data.message?.content !== "string" ||
+    data.message.content.trim().length === 0
+  ) {
+    throw new Error("Ollama returned an empty or invalid response.");
   }
 
   return data.message.content;
