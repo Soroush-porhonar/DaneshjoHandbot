@@ -1,33 +1,61 @@
-import { retrieveRelevantChunks } from "./retrieve.js";
+import { pool } from "../db/pool.js";
+import { getDocumentChunks, retrieveRelevantChunks } from "./retrieve.js";
+import type { RetrievalMode } from "../router.js";
 
 const LLM_URL = process.env.LLM_URL ?? "http://localhost:11434/api/chat";
-
 const LLM_MODEL = "qwen3.5:9b";
 
-export async function answerFromDocuments(
-  userId: number,
-  question: string,
+const RETRIEVAL_LIMITS = {
+  focused: 2,
+  multi_part: 4,
+} as const;
+
+const BROAD_BATCH_SIZE = 6;
+
+const SYSTEM_PROMPT = `
+تو یک دستیار آموزشی دقیق هستی که فقط بر اساس منابع ارائه‌شده پاسخ می‌دهد.
+
+قوانین پاسخ‌گویی:
+1. فقط از اطلاعات موجود در منابع ارائه‌شده استفاده کن.
+2. مستقیماً به سؤال پاسخ بده و از مقدمه‌چینی غیرضروری خودداری کن.
+3. پاسخ را متناسب با سؤال، واضح و مناسب مطالعه تنظیم کن.
+4. برای سؤال‌های گسترده، تمام نکات مرتبط موجود در منابع را پوشش بده.
+5. اطلاعات خارج از منابع را حدس نزن؛ حتی اگر از نظر علمی درست باشند.
+6. هیچ فرمول، مثال، قطعه کد، الگوریتم یا شماره صفحه‌ای را از خودت نساز.
+7. اگر منابع برای پاسخ کافی نیستند، این محدودیت را صریح بیان کن.
+8. شماره صفحه یا منبع اختراع نکن.
+9. بخش منابع را خودت اضافه نکن؛ برنامه آن را اضافه می‌کند.
+10. پاسخ را به زبان سؤال بنویس.
+`.trim();
+
+interface OllamaResponse {
+  message?: { content?: string };
+  done?: boolean;
+  done_reason?: string;
+  prompt_eval_count?: number;
+  eval_count?: number;
+}
+
+interface DocumentRow {
+  id: number;
+}
+
+interface SourceChunk {
+  filename: string;
+  pageNumber: number | null;
+  content: string;
+}
+
+async function askOllama(
+  systemPrompt: string,
+  userPrompt: string,
 ): Promise<string> {
-  const chunks = await retrieveRelevantChunks(userId, question, 4);
-
-  if (chunks.length === 0) {
-    return "در منابع بارگذاری‌شده، مطلب مرتبطی پیدا نکردم.";
-  }
-
-  const context = chunks
-    .map(
-      (chunk, index) =>
-        `[منبع ${index + 1}: فایل ${chunk.filename}، صفحه PDF ${chunk.pageNumber}]\n${chunk.content}`,
-    )
-    .join("\n\n---\n\n");
-
   const response = await fetch(LLM_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
     signal: AbortSignal.timeout(120_000),
-
     body: JSON.stringify({
       model: LLM_MODEL,
       stream: false,
@@ -36,32 +64,8 @@ export async function answerFromDocuments(
         num_predict: 4096,
       },
       messages: [
-        {
-          role: "system",
-          content: `
-تو یک دستیار هوشمند تحصیلی هستی که به دانشجویان کمک می‌کند مطالب درسی را از روی منابع آموزشی یاد بگیرند.
-
-قوانین:
-1. فقط بر اساس متن منابع ارائه‌شده پاسخ بده.
-2. از اطلاعاتی که در منابع وجود ندارند، برای تکمیل پاسخ استفاده نکن.
-3. اگر منابع برای پاسخ کافی نیستند، صادقانه بگو که اطلاعات کافی در متن پیدا نشد.
-4. اصطلاحات، دسته‌بندی‌ها و توضیحات منبع را تا حد امکان حفظ کن.
-5. پاسخ را به زبان سؤال و با ساختاری واضح و مناسب مطالعه ارائه بده.
-6. اگر سؤال درباره خلاصه‌سازی است، نکات اصلی متن را منظم و بدون اضافه کردن اطلاعات خارج از منبع خلاصه کن.
-7. شماره صفحه، نام فایل یا منبع جدید اختراع نکن.
-8. بخش منابع را خودت اضافه نکن؛ برنامه در انتهای پاسخ منابع بازیابی‌شده را اضافه می‌کند.
-      `.trim(),
-        },
-        {
-          role: "user",
-          content: `سؤال:
-${question}
-
-متن منابع:
-${context}
-
-بر اساس متن منابع به سؤال پاسخ بده.`,
-        },
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
       ],
     }),
   });
@@ -72,46 +76,156 @@ ${context}
     );
   }
 
-  const data = (await response.json()) as {
-    message?: { content?: string };
-    done?: boolean;
-    done_reason?: string;
-    prompt_eval_count?: number;
-    eval_count?: number;
-  };
-  console.log("Raw answer response:", JSON.stringify(data, null, 2));
-  console.log("Ollama generation metadata:", {
-    done: data.done,
-    done_reason: data.done_reason,
-    prompt_eval_count: data.prompt_eval_count,
-    eval_count: data.eval_count,
-  });
-
+  const data = (await response.json()) as OllamaResponse;
   const answer = data.message?.content?.trim();
 
   if (!answer) {
     throw new Error("Ollama returned an empty answer");
   }
 
-  // Build a unique list of sources from the retrieved chunks.
-  const sources = [
-    ...new Map(
+  return answer;
+}
+
+function formatChunks(chunks: SourceChunk[]): string {
+  return chunks
+    .map(
+      (chunk) =>
+        `[فایل: ${chunk.filename}، صفحه PDF ${
+          chunk.pageNumber ?? "نامشخص"
+        }]\n${chunk.content}`,
+    )
+    .join("\n\n---\n\n");
+}
+
+function buildSourceList(chunks: SourceChunk[]): string[] {
+  return [
+    ...new Set(
       chunks
         .filter((chunk) => chunk.pageNumber != null)
-        .map((chunk) => [
-          `${chunk.filename}:${chunk.pageNumber}`,
-          `${chunk.filename} — صفحه PDF ${chunk.pageNumber}`,
-        ]),
-    ).values(),
+        .map((chunk) => `${chunk.filename} — صفحه PDF ${chunk.pageNumber}`),
+    ),
   ];
+}
 
-  // Return the answer without a source section if no page numbers exist.
+function appendSources(answer: string, chunks: SourceChunk[]): string {
+  const sources = buildSourceList(chunks);
+
   if (sources.length === 0) {
     return answer;
   }
 
-  // Append citations generated by our application, not the LLM.
   return `${answer}\n\n**منابع بازیابی‌شده:**\n${sources
     .map((source) => `- ${source}`)
     .join("\n")}`;
+}
+
+async function answerBroadQuestion(
+  userId: number,
+  question: string,
+): Promise<{ answer: string; chunks: SourceChunk[] }> {
+  // Select the latest completed PDF for this user.
+  // This is appropriate while each broad question refers to one PDF.
+  const documentResult = await pool.query<DocumentRow>(
+    `SELECT id
+     FROM documents
+     WHERE user_id = $1
+       AND status = 'completed'
+     ORDER BY created_at DESC, id DESC
+     LIMIT 1`,
+    [userId],
+  );
+
+  const document = documentResult.rows[0];
+
+  if (!document) {
+    return {
+      answer: "در منابع بارگذاری‌شده، مطلب مرتبطی پیدا نکردم.",
+      chunks: [],
+    };
+  }
+
+  // Unlike similarity retrieval, this retrieves every chunk in the PDF.
+  const chunks = await getDocumentChunks(userId, document.id);
+
+  const batchSummaries: string[] = [];
+
+  for (let start = 0; start < chunks.length; start += BROAD_BATCH_SIZE) {
+    const batch = chunks.slice(start, start + BROAD_BATCH_SIZE);
+
+    const summary = await askOllama(
+      `تو یک استخراج‌کننده دقیق اطلاعات از جزوه درسی هستی.
+
+قوانین الزامی:
+- فقط اطلاعاتی را ثبت کن که صریحاً در متن ورودی وجود دارند.
+- هیچ دانش عمومی، مثال، تعریف، کد یا توضیحی از خودت اضافه نکن.
+- فرمول‌ها، نام توابع، مراحل الگوریتم‌ها و شرایط پایه را دقیق حفظ کن.
+- اگر کد برنامه در متن وجود دارد، فقط همان کد یا خلاصه وفادار آن را ثبت کن؛ کد جدید تولید نکن.
+- شماره صفحات PDF را دقیقاً مطابق برچسب‌های ورودی حفظ کن.
+- نکات مهم را حذف نکن و اطلاعات تکراری را می‌توانی ادغام کنی.
+- خروجی باید خلاصه‌ای ساختاریافته از محتوای واقعی متن باشد، نه یک آموزش مستقل.
+- اگر اطلاعاتی در متن وجود ندارد، درباره آن چیزی ننویس.`,
+      `این بخش از یک PDF آموزشی است.
+اطلاعات مهم آن را به‌صورت ساختاریافته استخراج کن.
+
+${formatChunks(batch)}`,
+    );
+
+    batchSummaries.push(
+      `خلاصه بخش ${Math.floor(start / BROAD_BATCH_SIZE) + 1}:\n${summary}`,
+    );
+  }
+
+  // Combine the batch summaries into a single coherent answer.
+  const finalAnswer = await askOllama(
+    SYSTEM_PROMPT,
+    `درخواست دانشجو:
+${question}
+
+در ادامه خلاصه‌های بخش‌های مختلف یک PDF کامل ارائه شده‌اند.
+با استفاده از همه خلاصه‌ها، یک پاسخ جامع، منسجم و ساختاریافته تهیه کن.
+مباحث مهم را حذف نکن، از تکرار غیرضروری جلوگیری کن و فقط بر اساس این خلاصه‌ها پاسخ بده.
+شماره صفحه‌های موجود را حفظ کن و شماره جدید اختراع نکن.
+
+${batchSummaries.join("\n\n---\n\n")}`,
+  );
+
+  return { answer: finalAnswer, chunks };
+}
+
+export async function answerFromDocuments(
+  userId: number,
+  question: string,
+  retrievalMode: RetrievalMode = "multi_part",
+): Promise<string> {
+  // Broad questions use the entire latest completed PDF.
+  if (retrievalMode === "broad") {
+    const result = await answerBroadQuestion(userId, question);
+    return appendSources(result.answer, result.chunks);
+  }
+
+  // Focused and multi-part questions retain the existing semantic retrieval.
+  const chunks = await retrieveRelevantChunks(
+    userId,
+    question,
+    RETRIEVAL_LIMITS[retrievalMode],
+  );
+
+  if (chunks.length === 0) {
+    return "در منابع بارگذاری‌شده، مطلب مرتبطی پیدا نکردم.";
+  }
+
+  const context = formatChunks(chunks);
+
+  const answer = await askOllama(
+    SYSTEM_PROMPT,
+    `سؤال:
+${question}
+
+متن منابع بازیابی‌شده:
+${context}
+
+بر اساس متن منابع به سؤال پاسخ بده.`,
+  );
+
+  return appendSources(answer, chunks);
 }

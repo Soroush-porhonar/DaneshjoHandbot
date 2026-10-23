@@ -1,8 +1,8 @@
 import "dotenv/config";
 import express from "express";
 import { getUpdates } from "./bale.js";
-import { handleMessage } from "./handlers.js";
 import { isUpdateProcessed, markUpdateProcessed } from "./db/updates.js";
+import { handleMessage, handleDocument } from "./handlers.js";
 
 const app = express();
 const port = Number(process.env.PORT);
@@ -39,7 +39,17 @@ async function main(): Promise<void> {
 
           const message = update.message;
 
-          if (message?.text) {
+          if (message?.document) {
+            const succeeded = await handleDocument(
+              message.chat.id,
+              message.document,
+            );
+
+            if (!succeeded) {
+              console.error("Update handling failed:", update.update_id);
+              break;
+            }
+          } else if (message?.text) {
             const succeeded = await handleMessage(
               message.chat.id,
               message.text,

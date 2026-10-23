@@ -1,24 +1,39 @@
 import "dotenv/config";
 import { pool } from "../db/pool.js";
 import { answerFromDocuments } from "./answer.js";
+import { routeMessage } from "../router.js";
 
 async function main() {
   const userId = 1;
 
   const questions = [
-    "معماری پایگاه داده چیست و چه مدل‌هایی برای پایگاه داده وجود دارد؟",
-    "بهترین بازی‌های نقش‌آفرینی کدام‌اند؟",
+    "تابع بازگشتی چیست؟",
+    "تابع فاکتوریل چگونه به روش بازگشتی پیاده‌سازی می‌شود؟",
+    "مسئله برج‌های هانوی چیست؟",
+    "مهم‌ترین مفاهیم این فصل چیست؟",
+    "پایگاه داده رابطه‌ای چیست؟",
   ];
 
   try {
     for (const question of questions) {
       console.log("\n================================");
       console.log("Question:", question);
-      console.log("================================\n");
+      console.log("================================");
+      const classification = await routeMessage(question, ["DB-Chapter1.pdf"]);
 
-      const answer = await answerFromDocuments(userId, question);
+      console.log("Classification:", classification);
 
-      console.log("Answer:\n", answer);
+      if (classification.route === "document") {
+        const answer = await answerFromDocuments(
+          userId,
+          question,
+          classification.retrievalMode,
+        );
+
+        console.log("Answer:\n", answer);
+      } else {
+        console.log("Routed to chat; skipping document retrieval.");
+      }
     }
   } finally {
     await pool.end();
