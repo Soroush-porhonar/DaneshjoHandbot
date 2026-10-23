@@ -1,6 +1,7 @@
 import { pool } from "../db/pool.js";
 import { getDocumentChunks, retrieveRelevantChunks } from "./retrieve.js";
 import type { RetrievalMode } from "../router.js";
+import { getSelectedDocumentId } from "../db/conversations.js";
 
 const LLM_URL = process.env.LLM_URL ?? "http://localhost:11434/api/chat";
 const LLM_MODEL = "qwen3.5:9b";
@@ -49,13 +50,16 @@ interface SourceChunk {
 async function askOllama(
   systemPrompt: string,
   userPrompt: string,
+  signal?: AbortSignal,
 ): Promise<string> {
   const response = await fetch(LLM_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    signal: AbortSignal.timeout(120_000),
+    signal: signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(120_000)])
+      : AbortSignal.timeout(120_000),
     body: JSON.stringify({
       model: LLM_MODEL,
       stream: false,
@@ -121,31 +125,18 @@ function appendSources(answer: string, chunks: SourceChunk[]): string {
 
 async function answerBroadQuestion(
   userId: number,
+  documentId: number,
   question: string,
+  signal?: AbortSignal,
 ): Promise<{ answer: string; chunks: SourceChunk[] }> {
-  // Select the latest completed PDF for this user.
-  // This is appropriate while each broad question refers to one PDF.
-  const documentResult = await pool.query<DocumentRow>(
-    `SELECT id
-     FROM documents
-     WHERE user_id = $1
-       AND status = 'completed'
-     ORDER BY created_at DESC, id DESC
-     LIMIT 1`,
-    [userId],
-  );
+  const chunks = await getDocumentChunks(userId, documentId);
 
-  const document = documentResult.rows[0];
-
-  if (!document) {
+  if (chunks.length === 0) {
     return {
-      answer: "در منابع بارگذاری‌شده، مطلب مرتبطی پیدا نکردم.",
+      answer: "در فایل انتخاب‌شده محتوایی برای بازیابی پیدا نکردم.",
       chunks: [],
     };
   }
-
-  // Unlike similarity retrieval, this retrieves every chunk in the PDF.
-  const chunks = await getDocumentChunks(userId, document.id);
 
   const batchSummaries: string[] = [];
 
@@ -196,22 +187,34 @@ export async function answerFromDocuments(
   userId: number,
   question: string,
   retrievalMode: RetrievalMode = "multi_part",
+  signal?: AbortSignal,
 ): Promise<string> {
-  // Broad questions use the entire latest completed PDF.
+  const documentId = await getSelectedDocumentId(userId);
+
+  if (documentId === null) {
+    return (
+      "هنوز جزوه‌ای برای مطالعه انتخاب نکرده‌اید.\n\n" +
+      "ابتدا /documents را ارسال کنید تا فهرست جزوه‌ها را ببینید، " +
+      "سپس با دستور /select شناسه جزوه موردنظر را انتخاب کنید.\n" +
+      "مثال: /select 1"
+    );
+  }
+
   if (retrievalMode === "broad") {
-    const result = await answerBroadQuestion(userId, question);
+    const result = await answerBroadQuestion(userId, documentId, question);
+
     return appendSources(result.answer, result.chunks);
   }
 
-  // Focused and multi-part questions retain the existing semantic retrieval.
   const chunks = await retrieveRelevantChunks(
     userId,
     question,
     RETRIEVAL_LIMITS[retrievalMode],
+    documentId,
   );
 
   if (chunks.length === 0) {
-    return "در منابع بارگذاری‌شده، مطلب مرتبطی پیدا نکردم.";
+    return "در جزوه انتخاب‌شده مطلب مرتبطی پیدا نکردم.";
   }
 
   const context = formatChunks(chunks);
@@ -225,6 +228,7 @@ ${question}
 ${context}
 
 بر اساس متن منابع به سؤال پاسخ بده.`,
+    signal,
   );
 
   return appendSources(answer, chunks);

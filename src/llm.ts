@@ -11,13 +11,18 @@ interface OllamaResponse {
   done: boolean;
 }
 
-export async function askAI(history: ChatHistoryMessage[]): Promise<string> {
+export async function askAI(
+  history: ChatHistoryMessage[],
+  signal?: AbortSignal,
+): Promise<string> {
   const response = await fetch(LLM_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    signal: AbortSignal.timeout(120_000),
+    signal: signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(120_000)])
+      : AbortSignal.timeout(120_000),
     body: JSON.stringify({
       model: MODEL,
       messages: [
