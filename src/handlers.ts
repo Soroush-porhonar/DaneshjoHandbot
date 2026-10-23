@@ -1,5 +1,4 @@
-import { START_TEXT, HELP_TEXT, ABOUT_TEXT } from "./text.js";
-import { startRequest, finishRequest } from "./cancellation.js";
+//import { startRequest, finishRequest } from "./cancellation.js";
 import { askAI } from "./llm.js";
 import { findOrCreateUser } from "./db/users.js";
 import { getRecentMessages, saveMessage } from "./db/messages.js";
@@ -9,6 +8,12 @@ import { routeMessage } from "./router.js";
 import { downloadBaleDocument, sendMessage } from "./bale.js";
 import type { BaleDocument } from "./bale.js";
 import { ingestPdf } from "./rag/ingest.js";
+import { START_TEXT, HELP_TEXT, ABOUT_TEXT } from "./text.js";
+import {
+  setPendingDeletion,
+  getPendingDeletion,
+  clearPendingDeletion,
+} from "./pendingDelete.js";
 import {
   findOrCreateConversation,
   selectDocument,
@@ -102,13 +107,30 @@ export async function handleMessage(
         !Number.isSafeInteger(documentId) ||
         documentId <= 0
       ) {
-        answer = "لطفاً شناسه جزوه را به شکل زیر وارد کنید:\n/delete 1";
+        answer = "لطفاً شناسه جزوه را به شکل زیر وارد کن:\n/delete 1";
       } else {
-        const deleted = await deleteDocument(userId, documentId);
+        const result = await pool.query<{ filename: string }>(
+          `SELECT filename
+       FROM documents
+       WHERE id = $1 AND user_id = $2`,
+          [documentId, userId],
+        );
 
-        answer = deleted
-          ? `جزوه شماره ${documentId} با موفقیت حذف شد.`
-          : "جزوه موردنظر پیدا نشد یا متعلق به شما نیست. ابتدا /documents را بررسی کنید.";
+        if (result.rows.length === 0) {
+          answer =
+            "جزوه موردنظر پیدا نشد یا متعلق به شما نیست. برای دیدن جزوه‌ها از /documents استفاده کن.";
+        } else {
+          setPendingDeletion(chatId, documentId);
+
+          answer =
+            `🗑️ تأیید حذف جزوه\n\n` +
+            `نام فایل: ${result.rows[0]?.filename}\n` +
+            `شناسه: ${documentId}\n\n` +
+            "آیا مطمئنی که می‌خواهی این جزوه را حذف کنی؟\n\n" +
+            "برای تأیید، دستور /confirm_delete را بفرست.\n" +
+            "برای انصراف، دستور /cancel_delete را بفرست.\n\n" +
+            "⚠️ با حذف جزوه، محتوای ذخیره‌شده آن نیز پاک می‌شود.";
+        }
       }
     } else {
       const documentsResult = await pool.query<{ filename: string }>(
