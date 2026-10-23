@@ -1,7 +1,6 @@
-import { START_TEXT, HELP_TEXT, ABOUT_TEXT } from "./text.js";
+//import { startRequest, finishRequest } from "./cancellation.js";
 import { askAI } from "./llm.js";
 import { findOrCreateUser } from "./db/users.js";
-import { findOrCreateConversation } from "./db/conversations.js";
 import { getRecentMessages, saveMessage } from "./db/messages.js";
 import { pool } from "./db/pool.js";
 import { answerFromDocuments } from "./rag/answer.js";
@@ -9,10 +8,21 @@ import { routeMessage } from "./router.js";
 import { downloadBaleDocument, sendMessage } from "./bale.js";
 import type { BaleDocument } from "./bale.js";
 import { ingestPdf } from "./rag/ingest.js";
-
+import { START_TEXT, HELP_TEXT, ABOUT_TEXT } from "./text.js";
+import {
+  setPendingDeletion,
+  getPendingDeletion,
+  clearPendingDeletion,
+} from "./pendingDelete.js";
+import {
+  findOrCreateConversation,
+  selectDocument,
+} from "./db/conversations.js";
+import { deleteDocument } from "./db/documents.js";
 export async function handleMessage(
   chatId: number,
   text: string,
+  signal?: AbortSignal,
 ): Promise<boolean> {
   let conversationId: number;
   let answer: string;
@@ -34,6 +44,94 @@ export async function handleMessage(
       answer = HELP_TEXT;
     } else if (text === "/about") {
       answer = ABOUT_TEXT;
+    } else if (text === "/documents") {
+      const result = await pool.query<{
+        id: number;
+        filename: string;
+        status: "pending" | "processing" | "completed" | "failed";
+      }>(
+        `SELECT id, filename, status
+     FROM documents
+     WHERE user_id = $1
+     ORDER BY created_at DESC, id DESC`,
+        [userId],
+      );
+
+      if (result.rows.length === 0) {
+        answer =
+          "هنوز هیچ جزوه‌ای بارگذاری نکرده‌اید.\n\nبرای شروع، یک فایل PDF ارسال کنید.";
+      } else {
+        const statusText = {
+          pending: "در انتظار پردازش",
+          processing: "در حال پردازش",
+          completed: "آماده مطالعه",
+          failed: "پردازش ناموفق",
+        } as const;
+
+        const documentList = result.rows
+          .map(
+            (document, index) =>
+              `${index + 1}. ${document.filename}\n` +
+              `   شناسه: ${document.id}\n` +
+              `   وضعیت: ${statusText[document.status]}`,
+          )
+          .join("\n\n");
+
+        answer =
+          `📚 جزوه‌های شما:\n\n${documentList}\n\n` +
+          "برای افزودن جزوه جدید، یک فایل PDF ارسال کنید.";
+      }
+    } else if (text.startsWith("/select")) {
+      const parts = text.trim().split(/\s+/);
+      const documentId = Number(parts[1]);
+
+      if (
+        parts.length !== 2 ||
+        !Number.isSafeInteger(documentId) ||
+        documentId <= 0
+      ) {
+        answer = "لطفاً شناسه فایل را به شکل زیر وارد کنید:\n/select 1";
+      } else {
+        const selected = await selectDocument(userId, documentId);
+
+        answer = selected
+          ? `فایل شماره ${documentId} برای مطالعه انتخاب شد.`
+          : "فایل موردنظر پیدا نشد، پردازش آن کامل نشده یا متعلق به شما نیست. ابتدا /documents را بررسی کنید.";
+      }
+    } else if (text.startsWith("/delete")) {
+      const parts = text.trim().split(/\s+/);
+      const documentId = Number(parts[1]);
+
+      if (
+        parts.length !== 2 ||
+        !Number.isSafeInteger(documentId) ||
+        documentId <= 0
+      ) {
+        answer = "لطفاً شناسه جزوه را به شکل زیر وارد کن:\n/delete 1";
+      } else {
+        const result = await pool.query<{ filename: string }>(
+          `SELECT filename
+       FROM documents
+       WHERE id = $1 AND user_id = $2`,
+          [documentId, userId],
+        );
+
+        if (result.rows.length === 0) {
+          answer =
+            "جزوه موردنظر پیدا نشد یا متعلق به شما نیست. برای دیدن جزوه‌ها از /documents استفاده کن.";
+        } else {
+          setPendingDeletion(chatId, documentId);
+
+          answer =
+            `🗑️ تأیید حذف جزوه\n\n` +
+            `نام فایل: ${result.rows[0]?.filename}\n` +
+            `شناسه: ${documentId}\n\n` +
+            "آیا مطمئنی که می‌خواهی این جزوه را حذف کنی؟\n\n" +
+            "برای تأیید، دستور /confirm_delete را بفرست.\n" +
+            "برای انصراف، دستور /cancel_delete را بفرست.\n\n" +
+            "⚠️ با حذف جزوه، محتوای ذخیره‌شده آن نیز پاک می‌شود.";
+        }
+      }
     } else {
       const documentsResult = await pool.query<{ filename: string }>(
         `SELECT DISTINCT filename
@@ -49,7 +147,7 @@ export async function handleMessage(
 
       if (documentNames.length === 0) {
         const history = await getRecentMessages(conversationId, 10);
-        answer = await askAI(history);
+        answer = await askAI(history, signal);
       } else {
         const classification = await routeMessage(text, documentNames);
 
@@ -58,14 +156,20 @@ export async function handleMessage(
             userId,
             text,
             classification.retrievalMode,
+            signal,
           );
         } else {
           const history = await getRecentMessages(conversationId, 10);
-          answer = await askAI(history);
+          answer = await askAI(history, signal);
         }
       }
     }
   } catch (error: unknown) {
+    if (signal?.aborted) {
+      console.log("AI request cancelled:", chatId);
+      return true;
+    }
+
     console.error("Failed to generate answer:", error);
     return false;
   }
@@ -141,6 +245,70 @@ export async function handleDocument(
       return true;
     } catch (sendError: unknown) {
       console.error("Failed to send document error message:", sendError);
+      return false;
+    }
+  }
+}
+
+export async function handleDocuments(chatId: number): Promise<boolean> {
+  try {
+    const user = await findOrCreateUser(String(chatId));
+
+    const result = await pool.query<{
+      id: number;
+      filename: string;
+      status: "pending" | "processing" | "completed" | "failed";
+      created_at: Date;
+    }>(
+      `SELECT id, filename, status, created_at
+       FROM documents
+       WHERE user_id = $1
+       ORDER BY created_at DESC, id DESC`,
+      [user.id],
+    );
+
+    if (result.rows.length === 0) {
+      await sendMessage(
+        chatId,
+        "هنوز هیچ جزوه‌ای بارگذاری نکرده‌اید.\n\nبرای شروع، یک فایل PDF ارسال کنید.",
+      );
+      return true;
+    }
+
+    const statusText = {
+      pending: "در انتظار پردازش",
+      processing: "در حال پردازش",
+      completed: "آماده مطالعه",
+      failed: "پردازش ناموفق",
+    } as const;
+
+    const documentList = result.rows
+      .map(
+        (document, index) =>
+          `${index + 1}. ${document.filename}\n` +
+          `   شناسه: ${document.id}\n` +
+          `   وضعیت: ${statusText[document.status]}`,
+      )
+      .join("\n\n");
+
+    await sendMessage(
+      chatId,
+      `📚 جزوه‌های شما:\n\n${documentList}\n\n` +
+        "برای افزودن جزوه جدید، یک فایل PDF ارسال کنید.",
+    );
+
+    return true;
+  } catch (error: unknown) {
+    console.error("Failed to list documents:", error);
+
+    try {
+      await sendMessage(
+        chatId,
+        "دریافت فهرست جزوه‌ها با خطا مواجه شد. لطفاً دوباره تلاش کنید.",
+      );
+      return true;
+    } catch (sendError: unknown) {
+      console.error("Failed to send document list error:", sendError);
       return false;
     }
   }

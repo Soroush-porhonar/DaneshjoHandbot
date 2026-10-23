@@ -2,7 +2,9 @@ import "dotenv/config";
 import express from "express";
 import { getUpdates } from "./bale.js";
 import { isUpdateProcessed, markUpdateProcessed } from "./db/updates.js";
-import { handleMessage, handleDocument } from "./handlers.js";
+import { handleMessage, handleDocument, handleDocuments } from "./handlers.js";
+import { startRequest, cancelRequest, finishRequest } from "./cancellation.js";
+import { sendMessage } from "./bale.js";
 
 const app = express();
 const port = Number(process.env.PORT);
@@ -50,14 +52,48 @@ async function main(): Promise<void> {
               break;
             }
           } else if (message?.text) {
-            const succeeded = await handleMessage(
-              message.chat.id,
-              message.text,
-            );
+            const chatId = message.chat.id;
+            const text = message.text.trim();
 
-            if (!succeeded) {
-              console.error("Update handling failed:", update.update_id);
-              break;
+            if (text === "/cancel") {
+              const cancelled = cancelRequest(chatId);
+
+              await sendMessage(
+                chatId,
+                cancelled
+                  ? "درخواست لغو شد."
+                  : "در حال حاضر درخواست فعالی برای لغو وجود ندارد.",
+              );
+            } else {
+              const controller = startRequest(chatId);
+
+              void (async () => {
+                try {
+                  const succeeded = await handleMessage(
+                    chatId,
+                    text,
+                    controller.signal,
+                  );
+
+                  if (!succeeded) {
+                    console.error("Update handling failed:", update.update_id);
+                  } else {
+                    await markUpdateProcessed(update.update_id);
+                  }
+                } catch (error) {
+                  console.error(
+                    "Failed to process update:",
+                    update.update_id,
+                    error,
+                  );
+                } finally {
+                  finishRequest(chatId, controller);
+                }
+              })();
+            }
+
+            if (text === "/cancel") {
+              await markUpdateProcessed(update.update_id);
             }
           }
 
