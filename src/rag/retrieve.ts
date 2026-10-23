@@ -64,6 +64,9 @@ export async function retrieveRelevantChunks(
   limit = 4,
   documentId?: number,
 ): Promise<RetrievedChunk[]> {
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 20) {
+    throw new Error("Retrieval limit must be an integer between 1 and 20.");
+  }
   const embedding = await generateEmbedding(question);
   const vector = `[${embedding.join(",")}]`;
 
@@ -77,10 +80,9 @@ export async function retrieveRelevantChunks(
          dc.embedding <=> $2::vector AS distance,
          ROW_NUMBER() OVER (
            PARTITION BY
-             d.user_id,
-             d.filename,
-             dc.page_number,
-             dc.content
+            dc.document_id,
+            dc.page_number,
+            dc.content
            ORDER BY
              CASE WHEN dc.page_number IS NOT NULL THEN 0 ELSE 1 END,
              d.id DESC,
