@@ -35,3 +35,14 @@ export function getDocumentErrorText(error: unknown): string {
 
   return "پردازش فایل با خطا مواجه شد. لطفاً کمی بعد دوباره تلاش کنید.";
 }
+
+export function logDatabaseError(
+  operation: string,
+  error: unknown,
+  context?: Record<string, unknown>,
+): void {
+  console.error(`Database operation failed: ${operation}`, {
+    ...context,
+    error,
+  });
+}

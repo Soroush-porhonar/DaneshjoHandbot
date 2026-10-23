@@ -1,7 +1,9 @@
 import "dotenv/config";
 import { BALE_TOKEN } from "./utils/env.js";
-import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { mkdir, open, writeFile } from "node:fs/promises";
+import { Transform } from "node:stream";
+import { pipeline } from "node:stream/promises";
 
 const BASE_URL = `https://tapi.bale.ai/bot${BALE_TOKEN}`;
 const FILE_BASE_URL = `https://tapi.bale.ai/file/bot${BALE_TOKEN}`;
@@ -48,11 +50,20 @@ async function callBale<T>(
       "Content-Type": "application/json",
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
+    signal: AbortSignal.timeout(30_000),
   });
 
-  const data = (await response.json()) as BaleResponse<T>;
+  let data: BaleResponse<T>;
 
-  if (!response.ok || !data.ok) {
+  try {
+    data = (await response.json()) as BaleResponse<T>;
+  } catch {
+    throw new Error(
+      `Bale API returned an invalid response: HTTP ${response.status}`,
+    );
+  }
+
+  if (!response.ok || data.ok !== true) {
     throw new Error(
       data.description ?? `Bale API error: HTTP ${response.status}`,
     );
@@ -72,6 +83,57 @@ export async function getUpdates(offset?: number): Promise<BaleUpdate[]> {
   const query = offset === undefined ? "" : `?offset=${offset}`;
 
   return callBale<BaleUpdate[]>("getUpdates" + query);
+}
+
+async function saveResponseToFile(
+  response: Response,
+  filePath: string,
+): Promise<void> {
+  const contentLength = response.headers.get("content-length");
+
+  if (contentLength !== null) {
+    const size = Number(contentLength);
+
+    if (Number.isFinite(size) && size > MAX_FILE_SIZE) {
+      throw new Error("The downloaded file exceeds the 20 MB limit.");
+    }
+  }
+
+  if (!response.body) {
+    throw new Error("The download response has no body.");
+  }
+
+  let totalBytes = 0;
+
+  const sizeLimiter = new Transform({
+    transform(chunk: Buffer, _encoding, callback) {
+      totalBytes += chunk.length;
+
+      if (totalBytes > MAX_FILE_SIZE) {
+        callback(new Error("The downloaded file exceeds the 20 MB limit."));
+        return;
+      }
+
+      callback(null, chunk);
+    },
+  });
+
+  const fileHandle = await open(filePath, "wx");
+
+  try {
+    await pipeline(response.body, sizeLimiter, fileHandle.createWriteStream());
+
+    if (totalBytes === 0) {
+      throw new Error("The downloaded file is empty.");
+    }
+  } catch (error) {
+    await fileHandle.close().catch(() => {});
+    const { unlink } = await import("node:fs/promises");
+    await unlink(filePath).catch(() => {});
+    throw error;
+  }
+
+  await fileHandle.close();
 }
 
 export async function downloadBaleDocument(
@@ -98,25 +160,17 @@ export async function downloadBaleDocument(
   if (fileInfo.file_size !== undefined && fileInfo.file_size > MAX_FILE_SIZE) {
     throw new Error("The file exceeds Bale's 20 MB download limit.");
   }
-
-  const response = await fetch(`${FILE_BASE_URL}/${fileInfo.file_path}`);
+  const response = await fetch(`${FILE_BASE_URL}/${fileInfo.file_path}`, {
+    signal: AbortSignal.timeout(60_000),
+  });
 
   if (!response.ok) {
     throw new Error(`File download failed: HTTP ${response.status}`);
   }
 
-  const fileBuffer = Buffer.from(await response.arrayBuffer());
-
-  if (fileBuffer.length > MAX_FILE_SIZE) {
-    throw new Error("The downloaded file exceeds the 20 MB limit.");
-  }
-
-  if (fileBuffer.length === 0) {
-    throw new Error("The downloaded file is empty.");
-  }
-
   const filePath = path.join(uploadDirectory, filename);
-  await writeFile(filePath, fileBuffer);
+
+  await saveResponseToFile(response, filePath);
 
   return { filePath, filename: originalName };
 }

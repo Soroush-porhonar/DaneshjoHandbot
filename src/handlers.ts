@@ -10,6 +10,7 @@ import type { BaleDocument } from "./bale.js";
 import { ingestPdf } from "./rag/ingest.js";
 import { START_TEXT, HELP_TEXT, ABOUT_TEXT } from "./text.js";
 import { getErrorMessage, getDocumentErrorText } from "./errors.js";
+import { logDatabaseError } from "./errors.js";
 import {
   setPendingDeletion,
   getPendingDeletion,
@@ -34,8 +35,21 @@ export async function handleMessage(
     conversationId = await findOrCreateConversation(userId);
     await saveMessage(conversationId, "user", text);
   } catch (error: unknown) {
-    console.error("Failed to save incoming message:", error);
-    return false;
+    logDatabaseError("save incoming message", error, { chatId });
+
+    try {
+      await sendMessage(
+        chatId,
+        "ذخیره پیام شما با مشکل مواجه شد. لطفاً کمی بعد دوباره تلاش کنید.",
+      );
+      return true;
+    } catch (sendError: unknown) {
+      console.error("Failed to notify user about database failure:", {
+        chatId,
+        error: sendError,
+      });
+      return false;
+    }
   }
 
   try {
