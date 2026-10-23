@@ -52,27 +52,43 @@ async function askOllama(
   userPrompt: string,
   signal?: AbortSignal,
 ): Promise<string> {
-  const response = await fetch(LLM_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    signal: signal
-      ? AbortSignal.any([signal, AbortSignal.timeout(120_000)])
-      : AbortSignal.timeout(120_000),
-    body: JSON.stringify({
-      model: LLM_MODEL,
-      stream: false,
-      think: false,
-      options: {
-        num_predict: 4096,
+  let response: Response;
+
+  try {
+    response = await fetch(LLM_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
       },
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-    }),
-  });
+      signal: signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(120_000)])
+        : AbortSignal.timeout(120_000),
+      body: JSON.stringify({
+        model: LLM_MODEL,
+        stream: false,
+        think: false,
+        options: {
+          num_predict: 4096,
+        },
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+      }),
+    });
+  } catch (error: unknown) {
+    // Preserve user-requested cancellation so the caller can handle it.
+    if (signal?.aborted) {
+      throw error;
+    }
+
+    if (error instanceof Error && error.name === "TimeoutError") {
+      throw new Error("Ollama chat request timed out after 120 seconds.");
+    }
+
+    // Preserve other network errors for logging and diagnosis.
+    throw error;
+  }
 
   if (!response.ok) {
     throw new Error(
@@ -80,14 +96,21 @@ async function askOllama(
     );
   }
 
-  const data = (await response.json()) as OllamaResponse;
-  const answer = data.message?.content?.trim();
+  let data: OllamaResponse;
 
-  if (!answer) {
-    throw new Error("Ollama returned an empty answer");
+  try {
+    data = (await response.json()) as OllamaResponse;
+  } catch {
+    throw new Error("Ollama returned an invalid JSON response.");
   }
 
-  return answer;
+  const answer = data.message?.content;
+
+  if (typeof answer !== "string" || answer.trim().length === 0) {
+    throw new Error("Ollama returned an empty or invalid answer.");
+  }
+
+  return answer.trim();
 }
 
 function formatChunks(chunks: SourceChunk[]): string {
@@ -159,6 +182,7 @@ async function answerBroadQuestion(
 اطلاعات مهم آن را به‌صورت ساختاریافته استخراج کن.
 
 ${formatChunks(batch)}`,
+      signal,
     );
 
     batchSummaries.push(
@@ -178,6 +202,7 @@ ${question}
 شماره صفحه‌های موجود را حفظ کن و شماره جدید اختراع نکن.
 
 ${batchSummaries.join("\n\n---\n\n")}`,
+    signal,
   );
 
   return { answer: finalAnswer, chunks };
@@ -201,7 +226,12 @@ export async function answerFromDocuments(
   }
 
   if (retrievalMode === "broad") {
-    const result = await answerBroadQuestion(userId, documentId, question);
+    const result = await answerBroadQuestion(
+      userId,
+      documentId,
+      question,
+      signal,
+    );
 
     return appendSources(result.answer, result.chunks);
   }
