@@ -9,6 +9,7 @@ import { downloadBaleDocument, sendMessage } from "./bale.js";
 import type { BaleDocument } from "./bale.js";
 import { ingestPdf } from "./rag/ingest.js";
 import { START_TEXT, HELP_TEXT, ABOUT_TEXT } from "./text.js";
+import { getErrorMessage, getDocumentErrorText } from "./errors.js";
 import {
   setPendingDeletion,
   getPendingDeletion,
@@ -166,12 +167,28 @@ export async function handleMessage(
     }
   } catch (error: unknown) {
     if (signal?.aborted) {
-      console.log("AI request cancelled:", chatId);
+      console.log("Request cancelled:", { chatId });
       return true;
     }
 
-    console.error("Failed to generate answer:", error);
-    return false;
+    console.error("Failed to handle message:", {
+      chatId,
+      error,
+    });
+
+    try {
+      await sendMessage(
+        chatId,
+        "متأسفم، هنگام پردازش پیام شما مشکلی پیش آمد. لطفاً کمی بعد دوباره تلاش کنید.",
+      );
+      return true;
+    } catch (sendError: unknown) {
+      console.error("Failed to send error message:", {
+        chatId,
+        error: sendError,
+      });
+      return false;
+    }
   }
 
   try {
@@ -235,16 +252,20 @@ export async function handleDocument(
 
     return true;
   } catch (error: unknown) {
-    console.error("Failed to process PDF document:", error);
+    console.error("Failed to process PDF document:", {
+      chatId,
+      errorMessage: getErrorMessage(error),
+      error,
+    });
 
     try {
-      await sendMessage(
-        chatId,
-        "پردازش فایل با خطا مواجه شد. لطفاً دوباره تلاش کنید.",
-      );
+      await sendMessage(chatId, getDocumentErrorText(error));
       return true;
     } catch (sendError: unknown) {
-      console.error("Failed to send document error message:", sendError);
+      console.error("Failed to send document error message:", {
+        chatId,
+        error: sendError,
+      });
       return false;
     }
   }
