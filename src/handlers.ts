@@ -202,7 +202,8 @@ export async function handleMessage(
         const history = await getRecentMessages(conversationId, 10);
         answer = await askAI(history, signal);
       } else {
-        const classification = await routeMessage(text, documentNames);
+        const history = await getRecentMessages(conversationId, 10);
+        const classification = await routeMessage(text, documentNames, history);
 
         if (classification.route === "document") {
           answer = await answerFromDocuments(

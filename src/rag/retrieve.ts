@@ -107,6 +107,14 @@ export async function retrieveRelevantChunks(
      LIMIT $3`,
     [userId, vector, limit, documentId ?? null, MAX_COSINE_DISTANCE],
   );
-
+  console.log(
+    "[RAG] Retrieved chunks:",
+    result.rows.map((chunk) => ({
+      documentId: chunk.documentId,
+      pageNumber: chunk.pageNumber,
+      distance: Number(chunk.distance),
+      contentPreview: chunk.content.slice(0, 120),
+    })),
+  );
   return result.rows;
 }

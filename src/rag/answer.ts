@@ -109,7 +109,8 @@ async function askOllama(
   if (typeof answer !== "string" || answer.trim().length === 0) {
     throw new Error("Ollama returned an empty or invalid answer.");
   }
-
+  console.log("[LLM] Response length:", answer.length);
+  console.log("[LLM] Response preview:", answer.slice(-500));
   return answer.trim();
 }
 
