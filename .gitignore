@@ -1,4 +1,56 @@
+
+# Dependencies
 node_modules/
-dist/
+
+# Environment variables and secrets
 .env
+.env.*
+!.env.example
+
+# Build output
+dist/
+build/
+out/
+
+# TypeScript
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Uploaded PDFs and downloaded files
 uploads/
+downloads/
+storage/
+
+# Local database dumps and backups
+*.sql
+*.dump
+*.backup
+
+# Coverage and test output
+coverage/
+
+# IDEs and editors
+.vscode/
+.idea/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local-only configuration
+*.local
+
+# Optional: local Ollama model files
+# models/

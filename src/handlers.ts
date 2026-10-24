@@ -97,13 +97,13 @@ export async function handleMessage(
           `${documentList}\n\n` +
           `🔄 **تغییر سند فعال**\n` +
           `اگر می‌خوای به‌جای سند فعلی، از یکی از جزوه‌های قبلی استفاده کنی، شناسه اون رو با دستور زیر وارد کن:\n` +
-          `/select ID\n` +
-          `مثلاً: /select 3\n\n` +
+          `/select ID \n` +
+          `مثلاً: /select 3 \n\n` +
           `🗑️ **حذف جزوه**\n` +
           `برای حذف جزوه‌ای که دیگه بهش نیاز نداری، از دستور زیر استفاده کن:\n` +
           `/delete ID\n` +
           `مثلاً: /delete 3\n\n` +
-          `💡 **نکته:** هر PDF جدیدی که با موفقیت پردازش بشه، به‌صورت خودکار سند فعال می‌شه.`;
+          `💡 **نکته:** هر PDF جدیدی که با موفقیت پردازش بشه، به‌صورت خودکار سند فعال می‌شه.\n\n`;
       }
     } else if (text.startsWith("/select")) {
       const parts = text.trim().split(/\s+/);
@@ -180,11 +180,17 @@ export async function handleMessage(
         }
       }
     } else {
+      await sendMessage(
+        chatId,
+        "⏳ دارم سؤال تو رو بررسی می‌کنم و پاسخ رو آماده می‌کنم...\n\n" +
+          "برای توقف عملیات، دستور /cancel رو بفرست.",
+      );
+
       const documentsResult = await pool.query<{ filename: string }>(
         `SELECT DISTINCT filename
-   FROM documents
-   WHERE user_id = $1
-     AND status = 'completed'`,
+     FROM documents
+     WHERE user_id = $1
+       AND status = 'completed'`,
         [userId],
       );
 
