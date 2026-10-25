@@ -11,6 +11,10 @@ export interface MessageClassification {
   retrievalMode: RetrievalMode;
 }
 
+interface ConversationMessage {
+  role: "user" | "assistant";
+  content: string;
+}
 interface RouterResponse {
   message?: {
     content?: string;
@@ -21,6 +25,7 @@ interface RouterResponse {
 export async function routeMessage(
   text: string,
   documentNames: string[],
+  history: ConversationMessage[] = [],
 ): Promise<MessageClassification> {
   const response = await fetch(LLM_URL, {
     method: "POST",
@@ -33,20 +38,20 @@ export async function routeMessage(
       stream: false,
       think: false,
       format: {
-  type: "object",
-  properties: {
-    route: {
-      type: "string",
-      enum: ["document", "chat"],
-    },
-    retrievalMode: {
-      type: "string",
-      enum: ["focused", "multi_part", "broad"],
-    },
-  },
-  required: ["route", "retrievalMode"],
-  additionalProperties: false,
-},
+        type: "object",
+        properties: {
+          route: {
+            type: "string",
+            enum: ["document", "chat"],
+          },
+          retrievalMode: {
+            type: "string",
+            enum: ["focused", "multi_part", "broad"],
+          },
+        },
+        required: ["route", "retrievalMode"],
+        additionalProperties: false,
+      },
       options: {
         num_predict: 64,
       },
@@ -62,6 +67,13 @@ export async function routeMessage(
 - توضیح یک مفهوم درسی، مثل معماری پایگاه داده.
 - خلاصه‌کردن فصل یا جزوه.
 - استخراج نکات مهم از فایل‌های آموزشی.
+- پیام‌های پیگیری درباره پاسخ قبلی، مانند:
+  «بیشتر توضیح بده»، «بازم توضیح بده»، «مثال بزن»،
+  «ساده‌تر بگو»، «ادامه بده» و «این قسمت را بیشتر باز کن»،
+  اگر به یک موضوع درسی قبلی اشاره دارند، document هستند.
+
+- اگر پیام فعلی به‌تنهایی مبهم است اما به احتمال زیاد
+  ادامه سؤال یا پاسخ درسی قبلی است، document را انتخاب کن.
 
 مسیر chat:
 - سلام و احوال‌پرسی و گفت‌وگوی عادی.
@@ -92,8 +104,13 @@ ${documentNames.map((name) => `- ${name}`).join("\n")}
 
 فقط شیء JSON مطابق ساختار درخواستی برگردان.
 مقدار route باید document یا chat باشد.
-          `.trim(),
+          
+      پیام‌های قبلی مکالمه را برای درک زمینه در نظر بگیر.
+      اگر پیام فعلی ادامه یک سؤال درسی قبلی است،
+      مسیر document را انتخاب کن.
+    `.trim(),
         },
+        ...history.slice(-10),
         {
           role: "user",
           content: text,
@@ -120,43 +137,39 @@ ${documentNames.map((name) => `- ${name}`).join("\n")}
     throw new Error("Ollama router returned empty content.");
   }
 
- let result: {
-  route?: unknown;
-  retrievalMode?: unknown;
-};
-
-try {
-  result = JSON.parse(content) as typeof result;
-} catch {
-  throw new Error(`Router returned invalid JSON: ${content}`);
-}
-
-if (result.route !== "document" && result.route !== "chat") {
-  throw new Error(`Router returned an invalid route: ${content}`);
-}
-
-const validModes: RetrievalMode[] = [
-  "focused",
-  "multi_part",
-  "broad",
-];
-
-if (
-  typeof result.retrievalMode !== "string" ||
-  !validModes.includes(result.retrievalMode as RetrievalMode)
-) {
-  throw new Error(`Router returned an invalid retrieval mode: ${content}`);
-}
-
-if (result.route === "chat") {
-  return {
-    route: "chat",
-    retrievalMode: "focused",
+  let result: {
+    route?: unknown;
+    retrievalMode?: unknown;
   };
-}
 
-return {
-  route: "document",
-  retrievalMode: result.retrievalMode as RetrievalMode,
-};
+  try {
+    result = JSON.parse(content) as typeof result;
+  } catch {
+    throw new Error(`Router returned invalid JSON: ${content}`);
+  }
+
+  if (result.route !== "document" && result.route !== "chat") {
+    throw new Error(`Router returned an invalid route: ${content}`);
+  }
+
+  const validModes: RetrievalMode[] = ["focused", "multi_part", "broad"];
+
+  if (
+    typeof result.retrievalMode !== "string" ||
+    !validModes.includes(result.retrievalMode as RetrievalMode)
+  ) {
+    throw new Error(`Router returned an invalid retrieval mode: ${content}`);
+  }
+
+  if (result.route === "chat") {
+    return {
+      route: "chat",
+      retrievalMode: "focused",
+    };
+  }
+
+  return {
+    route: "document",
+    retrievalMode: result.retrievalMode as RetrievalMode,
+  };
 }

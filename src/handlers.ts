@@ -12,14 +12,16 @@ import { START_TEXT, HELP_TEXT, ABOUT_TEXT } from "./text.js";
 import { getErrorMessage, getDocumentErrorText } from "./errors.js";
 import { logDatabaseError } from "./errors.js";
 import {
+  findOrCreateConversation,
+  selectDocument,
+  getSelectedDocumentId,
+} from "./db/conversations.js";
+import {
   setPendingDeletion,
   getPendingDeletion,
   clearPendingDeletion,
 } from "./pendingDelete.js";
-import {
-  findOrCreateConversation,
-  selectDocument,
-} from "./db/conversations.js";
+
 import { deleteDocument } from "./db/documents.js";
 export async function handleMessage(
   chatId: number,
@@ -83,18 +85,41 @@ export async function handleMessage(
           failed: "پردازش ناموفق",
         } as const;
 
+        const selectedDocumentId = await getSelectedDocumentId(userId);
+
+        const activeDocument = result.rows.find(
+          (document) => document.id === selectedDocumentId,
+        );
+
+        const activeDocumentText = activeDocument
+          ? `📌 **سند فعال**\n` +
+            `📄 ${activeDocument.filename}\n` +
+            `شناسه: ${activeDocument.id}\n` +
+            `وضعیت: ${statusText[activeDocument.status]}`
+          : `📌 **سند فعال**\nهنوز سندی انتخاب نشده است.`;
+
         const documentList = result.rows
           .map(
             (document, index) =>
-              `${index + 1}. ${document.filename}\n` +
-              `   شناسه: ${document.id}\n` +
-              `   وضعیت: ${statusText[document.status]}`,
+              `\t${index + 1}. ${document.filename}\n` +
+              `\tشناسه: ${document.id}\n` +
+              `\tوضعیت: ${statusText[document.status]}`,
           )
           .join("\n\n");
 
         answer =
-          `📚 جزوه‌های شما:\n\n${documentList}\n\n` +
-          "برای افزودن جزوه جدید، یک فایل PDF ارسال کنید.";
+          `${activeDocumentText}\n\n` +
+          `📚 **فهرست اسناد ذخیره‌شده**\n\n` +
+          `${documentList}\n\n` +
+          `🔄 **تغییر سند فعال**\n` +
+          `اگر می‌خوای به‌جای سند فعلی، از یکی از جزوه‌های قبلی استفاده کنی، شناسه اون رو با دستور زیر وارد کن:\n` +
+          `ID /select \n` +
+          `مثلاً: 3 /select \n\n` +
+          `🗑️ **حذف جزوه**\n` +
+          `برای حذف جزوه‌ای که دیگه بهش نیاز نداری، از دستور زیر استفاده کن:\n` +
+          `ID /delete \n` +
+          `مثلاً: 3 /delete \n\n` +
+          `💡 **نکته:** هر PDF جدیدی که با موفقیت پردازش بشه، به‌صورت خودکار سند فعال می‌شه.\n\n`;
       }
     } else if (text.startsWith("/select")) {
       const parts = text.trim().split(/\s+/);
@@ -112,6 +137,29 @@ export async function handleMessage(
         answer = selected
           ? `فایل شماره ${documentId} برای مطالعه انتخاب شد.`
           : "فایل موردنظر پیدا نشد، پردازش آن کامل نشده یا متعلق به شما نیست. ابتدا /documents را بررسی کنید.";
+      }
+    } else if (text === "/confirm_delete") {
+      const documentId = getPendingDeletion(chatId);
+
+      if (documentId === undefined || documentId === null) {
+        answer =
+          "درخواست حذف فعالی وجود ندارد. برای شروع، از دستور /delete ID استفاده کن.";
+      } else {
+        const deleted = await deleteDocument(userId, documentId);
+        clearPendingDeletion(chatId);
+
+        answer = deleted
+          ? `✅ جزوه با شناسه ${documentId} با موفقیت حذف شد.`
+          : "❌ حذف جزوه انجام نشد. ممکن است فایل قبلاً حذف شده باشد یا متعلق به شما نباشد.";
+      }
+    } else if (text === "/cancel_delete") {
+      const documentId = getPendingDeletion(chatId);
+
+      if (documentId === undefined) {
+        answer = "درخواست حذف فعالی برای لغو وجود ندارد.";
+      } else {
+        clearPendingDeletion(chatId);
+        answer = "عملیات حذف لغو شد. فایل شما حفظ شده است.";
       }
     } else if (text.startsWith("/delete")) {
       const parts = text.trim().split(/\s+/);
@@ -148,11 +196,17 @@ export async function handleMessage(
         }
       }
     } else {
+      await sendMessage(
+        chatId,
+        "⏳ دارم سؤال تو رو بررسی می‌کنم و پاسخ رو آماده می‌کنم...\n\n" +
+          "برای توقف عملیات، دستور /cancel رو بفرست.",
+      );
+
       const documentsResult = await pool.query<{ filename: string }>(
         `SELECT DISTINCT filename
-   FROM documents
-   WHERE user_id = $1
-     AND status = 'completed'`,
+     FROM documents
+     WHERE user_id = $1
+       AND status = 'completed'`,
         [userId],
       );
 
@@ -164,7 +218,8 @@ export async function handleMessage(
         const history = await getRecentMessages(conversationId, 10);
         answer = await askAI(history, signal);
       } else {
-        const classification = await routeMessage(text, documentNames);
+        const history = await getRecentMessages(conversationId, 10);
+        const classification = await routeMessage(text, documentNames, history);
 
         if (classification.route === "document") {
           answer = await answerFromDocuments(
@@ -261,7 +316,12 @@ export async function handleDocument(
 
     await sendMessage(
       chatId,
-      `فایل «${downloaded.filename}» با موفقیت پردازش شد.\nشناسه سند: ${documentId}\nاکنون می‌توانید درباره محتوای آن سؤال بپرسید.`,
+      `✅ فایل PDF با موفقیت پردازش شد و به‌عنوان **سند فعال** انتخاب شد.
+
+از این به بعد می‌تونی مستقیماً سؤالاتت رو درباره همین فایل بپرسی.
+
+📚 **برای مشاهده فایل‌های قبلی یا تغییر سند فعال:**
+/documents`,
     );
 
     return true;

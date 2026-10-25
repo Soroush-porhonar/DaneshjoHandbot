@@ -78,11 +78,22 @@ export async function ingestPdf(
 
       await client.query(
         `
-          UPDATE documents
-          SET status = 'completed'
-          WHERE id = $1
-        `,
+    UPDATE documents
+    SET status = 'completed'
+    WHERE id = $1
+  `,
         [documentId],
+      );
+
+      // Automatically select the newly uploaded document.
+      await client.query(
+        `
+    UPDATE conversations
+    SET selected_document_id = $2,
+        updated_at = NOW()
+    WHERE user_id = $1
+  `,
+        [userId, documentId],
       );
 
       await client.query("COMMIT");
