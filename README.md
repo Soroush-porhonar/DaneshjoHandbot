@@ -10,9 +10,6 @@ Built with TypeScript, Node.js, PostgreSQL, pgvector, Ollama, and Qwen 3.5 9B.
   <img src="screenshots/Screenshot_20261025_201501_Bale.jpg" width="18%" alt="Start Screen" />
   <img src="screenshots/Screenshot_20261025_202152_Bale.jpg" width="18%" alt="Multi Language Support" />
   <img src="screenshots/Screenshot_20261025_202331_Bale.jpg" width="18%" alt="Document Support" />
-</p>
-
-<p align="center">
   <img src="screenshots/Screenshot_20261025_202413_Bale.jpg" width="18%" alt="Precise RAG Responses" />
   <img src="screenshots/Screenshot_20261025_202440_Bale.jpg" width="18%" alt="Multiple Document Management" />
 </p>
