@@ -12,14 +12,16 @@ import { START_TEXT, HELP_TEXT, ABOUT_TEXT } from "./text.js";
 import { getErrorMessage, getDocumentErrorText } from "./errors.js";
 import { logDatabaseError } from "./errors.js";
 import {
+  findOrCreateConversation,
+  selectDocument,
+  getSelectedDocumentId,
+} from "./db/conversations.js";
+import {
   setPendingDeletion,
   getPendingDeletion,
   clearPendingDeletion,
 } from "./pendingDelete.js";
-import {
-  findOrCreateConversation,
-  selectDocument,
-} from "./db/conversations.js";
+
 import { deleteDocument } from "./db/documents.js";
 export async function handleMessage(
   chatId: number,
@@ -83,6 +85,19 @@ export async function handleMessage(
           failed: "پردازش ناموفق",
         } as const;
 
+        const selectedDocumentId = await getSelectedDocumentId(userId);
+
+        const activeDocument = result.rows.find(
+          (document) => document.id === selectedDocumentId,
+        );
+
+        const activeDocumentText = activeDocument
+          ? `📌 **سند فعال**\n` +
+            `📄 ${activeDocument.filename}\n` +
+            `شناسه: ${activeDocument.id}\n` +
+            `وضعیت: ${statusText[activeDocument.status]}`
+          : `📌 **سند فعال**\nهنوز سندی انتخاب نشده است.`;
+
         const documentList = result.rows
           .map(
             (document, index) =>
@@ -93,16 +108,17 @@ export async function handleMessage(
           .join("\n\n");
 
         answer =
+          `${activeDocumentText}\n\n` +
           `📚 **فهرست اسناد ذخیره‌شده**\n\n` +
           `${documentList}\n\n` +
           `🔄 **تغییر سند فعال**\n` +
           `اگر می‌خوای به‌جای سند فعلی، از یکی از جزوه‌های قبلی استفاده کنی، شناسه اون رو با دستور زیر وارد کن:\n` +
-          `/select ID \n` +
-          `مثلاً: /select 3 \n\n` +
+          `ID /select \n` +
+          `مثلاً: 3 /select \n\n` +
           `🗑️ **حذف جزوه**\n` +
           `برای حذف جزوه‌ای که دیگه بهش نیاز نداری، از دستور زیر استفاده کن:\n` +
-          `/delete ID\n` +
-          `مثلاً: /delete 3\n\n` +
+          `ID /delete \n` +
+          `مثلاً: 3 /delete \n\n` +
           `💡 **نکته:** هر PDF جدیدی که با موفقیت پردازش بشه، به‌صورت خودکار سند فعال می‌شه.\n\n`;
       }
     } else if (text.startsWith("/select")) {

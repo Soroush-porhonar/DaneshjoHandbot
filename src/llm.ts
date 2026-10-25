@@ -59,6 +59,8 @@ export async function askAI(
       response: data,
       model: MODEL,
       stream: false,
+      num_ctx: 16384,
+      num_predict: 8192,
       historyLength: history.length,
       lastMessage: history.at(-1),
     });

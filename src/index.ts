@@ -2,7 +2,7 @@ import "dotenv/config";
 import express from "express";
 import { getUpdates } from "./bale.js";
 import { isUpdateProcessed, markUpdateProcessed } from "./db/updates.js";
-import { handleMessage, handleDocument, handleDocuments } from "./handlers.js";
+import { handleMessage, handleDocument } from "./handlers.js";
 import { startRequest, cancelRequest, finishRequest } from "./cancellation.js";
 import { sendMessage } from "./bale.js";
 

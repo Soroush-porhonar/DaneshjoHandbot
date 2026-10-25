@@ -9,7 +9,7 @@ const BASE_URL = `https://tapi.bale.ai/bot${BALE_TOKEN}`;
 const FILE_BASE_URL = `https://tapi.bale.ai/file/bot${BALE_TOKEN}`;
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
-const MAX_MESSAGE_LENGTH = 2000;
+const MAX_MESSAGE_LENGTH = 4000;
 
 function splitMessage(text: string): string[] {
   const parts: string[] = [];
@@ -101,12 +101,6 @@ async function callBale<T>(
 export async function sendMessage(chatId: number, text: string): Promise<void> {
   const parts = splitMessage(text);
 
-  for (const part of parts) {
-    await callBale("sendMessage", {
-      chat_id: chatId,
-      text,
-    });
-  }
   for (const [index, part] of parts.entries()) {
     console.log(
       `[Bale] Sending part ${index + 1}/${parts.length}, length: ${part.length}`,
@@ -114,7 +108,7 @@ export async function sendMessage(chatId: number, text: string): Promise<void> {
 
     await callBale("sendMessage", {
       chat_id: chatId,
-      text,
+      text: part,
     });
   }
 }
