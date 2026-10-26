@@ -1,0 +1,15 @@
+[
+  { "id": "ds1-fact-iter", "documentId": 9, "mode": "focused", "question": "تابع فاکتوریل به صورت غیر بازگشتی چگونه نوشته می‌شود؟", "expectedPages": [9] },
+  { "id": "ds1-q-14-3", "documentId": 9, "mode": "focused", "question": "مقدار Q(14,3) چند می‌شود و چگونه محاسبه می‌شود؟", "expectedPages": [21] },
+  { "id": "ds1-hanoi", "documentId": 9, "mode": "focused", "question": "تابع بازگشتی مسئله برج‌های هانوی را توضیح بده", "expectedPages": [29] },
+  { "id": "ds1-recursion-stack", "documentId": 9, "mode": "multi_part", "question": "فراخوانی‌های بازگشتی را چگونه نمایش می‌دهیم و پشته چه نقشی دارد؟", "expectedPages": [17] },
+  { "id": "ds2-notation", "documentId": 3, "mode": "multi_part", "question": "رابطه بین نمادهای O و Ω و Θ چیست؟", "expectedPages": [29] },
+  { "id": "ds2-time-factors", "documentId": 3, "mode": "focused", "question": "فاکتورهای مهم ارزیابی یک الگوریتم کدامند؟", "expectedPages": [1] },
+  { "id": "ds2-recursive-order", "documentId": 3, "mode": "focused", "question": "مرتبه اجرایی توابع بازگشتی را چطور محاسبه می‌کنیم؟", "expectedPages": [33] },
+  { "id": "alg-kruskal", "documentId": 10, "mode": "focused", "question": "الگوریتم کروسکال چه ویژگی‌ای دارد و زمان اجرای آن به چه چیزی بستگی دارد؟", "expectedPages": [17] },
+  { "id": "alg-dijkstra", "documentId": 10, "mode": "focused", "question": "الگوریتم دایجکسترا چگونه کار می‌کند؟", "expectedPages": [21] },
+  { "id": "alg-huffman", "documentId": 10, "mode": "focused", "question": "الگوریتم هافمن برای چه کاری استفاده می‌شود؟", "expectedPages": [25] },
+  { "id": "alg-prim-vs-tree", "documentId": 10, "mode": "multi_part", "question": "درخت پوشا چیست و الگوریتم پریم چه محدودیت‌هایی دارد؟", "expectedPages": [5, 13] },
+  { "id": "lisbon-cause", "documentId": 6, "mode": "focused", "question": "علت طبیعی زلزله لیسبون چه بود و این پرسش چه تغییری در تفکر ایجاد کرد؟", "expectedPages": [3] },
+  { "id": "lisbon-rebuild", "documentId": 6, "mode": "focused", "question": "لیسبون پس از زلزله چگونه بازسازی شد؟", "expectedPages": [8] }
+]
