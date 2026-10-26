@@ -1,25 +1,23 @@
 import { PDFParse } from "pdf-parse";
 import { PdfExtractError } from "../errors.js";
 
-export async function extractPdfText(filePath: string): Promise<string> {
+export interface PageText {
+  pageNumber: number;
+  text: string;
+}
+
+/** Extracts the raw text layer of every page (1-based page numbers). */
+export async function extractPdfPages(filePath: string): Promise<PageText[]> {
   const parser = new PDFParse({ url: filePath });
 
   try {
     const result = await parser.getText();
-    const text = result.text.trim();
 
-    if (!text) {
-      throw new PdfExtractError(
-        "No text was extracted. The PDF may be scanned or image-only.",
-      );
-    }
-
-    return text;
+    return result.pages.map((page) => ({
+      pageNumber: page.num,
+      text: page.text,
+    }));
   } catch (error: unknown) {
-    if (error instanceof PdfExtractError) {
-      throw error;
-    }
-
     throw new PdfExtractError(
       `Failed to parse PDF: ${error instanceof Error ? error.message : String(error)}`,
     );

@@ -15,7 +15,7 @@ import { retrieveRelevantChunks } from "../src/rag/retrieve.js";
 
 interface EvalQuestion {
   id: string;
-  documentId: number;
+  filename: string;
   mode: "focused" | "multi_part" | "broad";
   question: string;
   expectedPages: number[];
@@ -42,19 +42,26 @@ let reciprocalRankSum = 0;
 let totalMs = 0;
 
 for (const q of questions) {
-  const owner = await pool.query<{ user_id: number }>(
-    "SELECT user_id FROM documents WHERE id = $1",
-    [q.documentId],
+  const found = await pool.query<{ id: number; user_id: number }>(
+    `SELECT id, user_id FROM documents
+     WHERE filename = $1 AND status = 'completed'
+     ORDER BY id DESC LIMIT 1`,
+    [q.filename],
   );
-  const userId = owner.rows[0]?.user_id;
+  const document = found.rows[0];
 
-  if (userId === undefined) {
-    console.warn(`Skipping ${q.id}: document ${q.documentId} not found`);
+  if (!document) {
+    console.warn(`Skipping ${q.id}: no completed document named ${q.filename}`);
     continue;
   }
 
   const start = performance.now();
-  const chunks = await retrieveRelevantChunks(userId, q.question, limit, q.documentId);
+  const chunks = await retrieveRelevantChunks(
+    document.user_id,
+    q.question,
+    limit,
+    document.id,
+  );
   const ms = performance.now() - start;
   totalMs += ms;
 

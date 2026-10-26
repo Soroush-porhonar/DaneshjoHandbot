@@ -1,6 +1,6 @@
 import { pool } from "../db/pool.js";
-import { extractPdfText } from "./pdf.js";
-import { chunkText } from "./chunk.js";
+import { extractPdfPages } from "./pdf.js";
+import { chunkPages } from "./chunk.js";
 import { generateEmbeddings } from "./embeddings.js";
 import { PdfExtractError } from "../errors.js";
 import { logger } from "../logger.js";
@@ -30,8 +30,8 @@ export async function ingestPdf(
   const documentId = document.id;
 
   try {
-    const text = await extractPdfText(filePath);
-    const chunks = chunkText(text);
+    const pages = await extractPdfPages(filePath);
+    const chunks = chunkPages(pages);
 
     if (chunks.length === 0) {
       throw new PdfExtractError("The PDF contains no usable text");

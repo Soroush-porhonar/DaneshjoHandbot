@@ -10,7 +10,9 @@
     "dev": "tsx watch src/main.ts",
     "start": "tsx src/main.ts",
     "typecheck": "tsc --noEmit",
-    "eval": "tsx scripts/eval.ts"
+    "eval": "tsx scripts/eval.ts",
+    "reset-data": "tsx scripts/reset-data.ts",
+    "ingest": "tsx scripts/ingest-files.ts"
   },
   "keywords": [],
   "author": "",
