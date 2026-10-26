@@ -72,7 +72,7 @@ export async function routeMessage(
   const content = await chat({
     think: false,
     format: ROUTER_SCHEMA,
-    options: { num_predict: 64 },
+    options: { num_predict: 64, temperature: config.llm.temperature.router },
     timeoutMs: config.llm.routerTimeoutMs,
     messages: [
       { role: "system", content: buildRouterSystemPrompt(documentNames) },

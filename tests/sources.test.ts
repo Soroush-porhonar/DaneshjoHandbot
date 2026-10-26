@@ -15,6 +15,15 @@ describe("sources", () => {
     ]);
   });
 
+  it("cites only real hits, not neighbour chunks", () => {
+    expect(
+      buildSourceList([
+        { ...chunk(3), isHit: true },
+        { ...chunk(4), isHit: false },
+      ]),
+    ).toEqual(["notes.pdf — صفحه PDF 3"]);
+  });
+
   it("returns the answer unchanged when there are no sources", () => {
     expect(appendSources("answer", [chunk(null)])).toBe("answer");
   });

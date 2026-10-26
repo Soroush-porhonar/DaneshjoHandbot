@@ -9,16 +9,22 @@ import {
   buildBroadSynthesisPrompt,
   buildFocusedUserPrompt,
 } from "../llm/prompts/rag.js";
-import { getDocumentChunks, retrieveRelevantChunks } from "./retrieve.js";
+import { batchByChars } from "./batch.js";
+import { getDocumentChunks, retrieveContext } from "./retrieve.js";
 import type { RetrievalMode } from "./router.js";
 
 interface SourceChunk {
   filename: string;
   pageNumber: number | null;
   content: string;
+  /** False for neighbour chunks, which are context but not cited. */
+  isHit?: boolean;
 }
 
-const GENERATION_OPTIONS = { num_predict: 4096 };
+const GENERATION_OPTIONS = {
+  num_predict: 4096,
+  temperature: config.llm.temperature.rag,
+};
 
 const NO_DOCUMENT_SELECTED_TEXT =
   "هنوز جزوه‌ای برای مطالعه انتخاب نکرده‌اید.\n\n" +
@@ -57,7 +63,7 @@ export function buildSourceList(chunks: SourceChunk[]): string[] {
   return [
     ...new Set(
       chunks
-        .filter((chunk) => chunk.pageNumber != null)
+        .filter((chunk) => chunk.pageNumber != null && chunk.isHit !== false)
         .map((chunk) => `${chunk.filename} — صفحه PDF ${chunk.pageNumber}`),
     ),
   ];
@@ -87,12 +93,13 @@ async function answerBroadQuestion(
     return "در فایل انتخاب‌شده محتوایی برای بازیابی پیدا نکردم.";
   }
 
-  const batchSize = config.rag.broadBatchSize;
   const summaries: string[] = [];
 
-  for (let start = 0; start < chunks.length; start += batchSize) {
-    const batch = chunks.slice(start, start + batchSize);
-    const batchNumber = Math.floor(start / batchSize) + 1;
+  for (const [index, batch] of batchByChars(
+    chunks,
+    config.rag.broadBatchChars,
+  ).entries()) {
+    const batchNumber = index + 1;
 
     const summary = await generate(
       BROAD_EXTRACTION_SYSTEM_PROMPT,
@@ -120,12 +127,7 @@ async function answerFocusedQuestion(
   mode: "focused" | "multi_part",
   signal?: AbortSignal,
 ): Promise<string> {
-  const chunks = await retrieveRelevantChunks(
-    userId,
-    question,
-    config.rag.retrievalLimits[mode],
-    documentId,
-  );
+  const chunks = await retrieveContext(userId, question, mode, documentId);
 
   if (chunks.length === 0) {
     return "در جزوه انتخاب‌شده مطلب مرتبطی پیدا نکردم.";

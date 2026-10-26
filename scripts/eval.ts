@@ -11,7 +11,7 @@
 import { readFile } from "node:fs/promises";
 import { performance } from "node:perf_hooks";
 import { pool } from "../src/db/pool.js";
-import { retrieveRelevantChunks } from "../src/rag/retrieve.js";
+import { retrieveContext, retrieveRelevantChunks } from "../src/rag/retrieve.js";
 
 interface EvalQuestion {
   id: string;
@@ -36,6 +36,11 @@ const questions = (
 
 const rows: Record<string, string | number>[] = [];
 let hit1 = 0;
+let hit2 = 0;
+let oldCover = 0;
+let newCover = 0;
+let contextChunks = 0;
+let scored = 0;
 let hit3 = 0;
 let hit5 = 0;
 let reciprocalRankSum = 0;
@@ -69,15 +74,31 @@ for (const q of questions) {
     chunks.findIndex((c) => c.pageNumber !== null && q.expectedPages.includes(c.pageNumber)) + 1;
 
   if (rank === 1) hit1++;
+  if (rank >= 1 && rank <= 2) hit2++;
   if (rank >= 1 && rank <= 3) hit3++;
   if (rank >= 1 && rank <= 5) hit5++;
   if (rank > 0) reciprocalRankSum += 1 / rank;
+
+  // Context coverage: is an answer page inside what the model would actually see?
+  const OLD_LIMIT = { focused: 2, multi_part: 4, broad: 4 } as const;
+  const mode = q.mode === "broad" ? "multi_part" : q.mode;
+  const covers = (pages: (number | null)[]) =>
+    pages.some((p) => p !== null && q.expectedPages.includes(p));
+  const oldHit = covers(chunks.slice(0, OLD_LIMIT[q.mode]).map((c) => c.pageNumber));
+  const context = await retrieveContext(document.user_id, q.question, mode, document.id);
+  const newHit = covers(context.map((c) => c.pageNumber));
+  scored++;
+  if (oldHit) oldCover++;
+  if (newHit) newCover++;
+  contextChunks += context.length;
 
   rows.push({
     id: q.id,
     mode: q.mode,
     expected: q.expectedPages.join(","),
     rank: rank || "MISS",
+    old: oldHit ? "yes" : "NO",
+    new: newHit ? "yes" : "NO",
     retrieved: chunks.length,
     pages: chunks.slice(0, 5).map((c) => c.pageNumber).join(","),
     ms: Math.round(ms),
@@ -90,7 +111,11 @@ const n = rows.length;
 const pct = (value: number) => `${((value / n) * 100).toFixed(0)}%`;
 
 console.log(
-  `questions=${n}  hit@1=${pct(hit1)}  hit@3=${pct(hit3)}  hit@5=${pct(hit5)}  ` +
+  `context coverage: old(top-${"2/4"}, no neighbours)=${pct(oldCover)}  new=${pct(newCover)}  ` +
+    `avgContextChunks=${(contextChunks / Math.max(scored, 1)).toFixed(1)}`,
+);
+console.log(
+  `questions=${n}  hit@1=${pct(hit1)}  hit@2=${pct(hit2)}  hit@3=${pct(hit3)}  hit@5=${pct(hit5)}  ` +
     `MRR=${(reciprocalRankSum / n).toFixed(3)}  avgMs=${Math.round(totalMs / n)}  limit=${limit}`,
 );
 
