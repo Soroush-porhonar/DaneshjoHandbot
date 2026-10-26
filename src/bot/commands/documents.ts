@@ -1,0 +1,110 @@
+import { getSelectedDocumentId, selectDocument } from "../../db/conversations.js";
+import {
+  deleteDocument,
+  findDocumentFilename,
+  listDocuments,
+} from "../../db/documents.js";
+import {
+  DELETE_CANCELLED_TEXT,
+  DELETE_FAILED_TEXT,
+  DELETE_NOT_FOUND_TEXT,
+  DELETE_USAGE_TEXT,
+  NO_DOCUMENTS_TEXT,
+  NO_PENDING_DELETE_TEXT,
+  NO_PENDING_DELETE_TO_CANCEL_TEXT,
+  SELECT_FAILED_TEXT,
+  SELECT_USAGE_TEXT,
+  deleteConfirmationText,
+  deleteSucceededText,
+  documentsListText,
+  selectedText,
+} from "../messages.js";
+import {
+  clearPendingDeletion,
+  getPendingDeletion,
+  setPendingDeletion,
+} from "../pendingDelete.js";
+import type { CommandHandler } from "./types.js";
+
+/** Parses a single positive-integer argument, or returns null. */
+function parseDocumentId(args: string[]): number | null {
+  const documentId = Number(args[0]);
+
+  if (args.length !== 1 || !Number.isSafeInteger(documentId) || documentId <= 0) {
+    return null;
+  }
+
+  return documentId;
+}
+
+export const documentsCommand: CommandHandler = async ({ userId }) => {
+  const documents = await listDocuments(userId);
+
+  if (documents.length === 0) {
+    return NO_DOCUMENTS_TEXT;
+  }
+
+  const selectedDocumentId = await getSelectedDocumentId(userId);
+
+  return documentsListText(documents, selectedDocumentId);
+};
+
+export const selectCommand: CommandHandler = async ({ userId, args }) => {
+  const documentId = parseDocumentId(args);
+
+  if (documentId === null) {
+    return SELECT_USAGE_TEXT;
+  }
+
+  return (await selectDocument(userId, documentId))
+    ? selectedText(documentId)
+    : SELECT_FAILED_TEXT;
+};
+
+export const deleteCommand: CommandHandler = async ({
+  chatId,
+  userId,
+  args,
+}) => {
+  const documentId = parseDocumentId(args);
+
+  if (documentId === null) {
+    return DELETE_USAGE_TEXT;
+  }
+
+  const filename = await findDocumentFilename(userId, documentId);
+
+  if (filename === null) {
+    return DELETE_NOT_FOUND_TEXT;
+  }
+
+  setPendingDeletion(chatId, documentId);
+
+  return deleteConfirmationText(filename, documentId);
+};
+
+export const confirmDeleteCommand: CommandHandler = async ({
+  chatId,
+  userId,
+}) => {
+  const documentId = getPendingDeletion(chatId);
+
+  if (documentId === null) {
+    return NO_PENDING_DELETE_TEXT;
+  }
+
+  const deleted = await deleteDocument(userId, documentId);
+  clearPendingDeletion(chatId);
+
+  return deleted ? deleteSucceededText(documentId) : DELETE_FAILED_TEXT;
+};
+
+export const cancelDeleteCommand: CommandHandler = async ({ chatId }) => {
+  if (getPendingDeletion(chatId) === null) {
+    return NO_PENDING_DELETE_TO_CANCEL_TEXT;
+  }
+
+  clearPendingDeletion(chatId);
+
+  return DELETE_CANCELLED_TEXT;
+};

@@ -1,3 +1,19 @@
+import { logger } from "./logger.js";
+
+/** The Ollama service failed, was unreachable, or returned bad data. */
+export class OllamaError extends Error {
+  override name = "OllamaError";
+}
+
+export class OllamaTimeoutError extends OllamaError {
+  override name = "OllamaTimeoutError";
+}
+
+/** The PDF could not be read or contained no usable text. */
+export class PdfExtractError extends Error {
+  override name = "PdfExtractError";
+}
+
 export function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
@@ -6,30 +22,24 @@ export function getErrorMessage(error: unknown): string {
   return String(error);
 }
 
-export function getDocumentErrorText(error: unknown): string {
-  const message = getErrorMessage(error).toLowerCase();
+function isTimeoutOrAbort(error: unknown): boolean {
+  return (
+    error instanceof OllamaTimeoutError ||
+    (error instanceof Error &&
+      (error.name === "TimeoutError" || error.name === "AbortError"))
+  );
+}
 
-  if (
-    message.includes("timeout") ||
-    message.includes("timed out") ||
-    message.includes("aborted")
-  ) {
+export function getDocumentErrorText(error: unknown): string {
+  if (isTimeoutOrAbort(error)) {
     return "پردازش فایل بیش از حد طول کشید. لطفاً کمی بعد دوباره تلاش کنید.";
   }
 
-  if (
-    message.includes("ollama") ||
-    message.includes("embedding") ||
-    message.includes("connection refused")
-  ) {
+  if (error instanceof OllamaError || getErrorMessage(error).includes("ECONNREFUSED")) {
     return "سرویس هوش مصنوعی در حال حاضر در دسترس نیست. لطفاً کمی بعد دوباره تلاش کنید.";
   }
 
-  if (
-    message.includes("pdf") ||
-    message.includes("parse") ||
-    message.includes("invalid")
-  ) {
+  if (error instanceof PdfExtractError) {
     return "خواندن فایل PDF با مشکل مواجه شد. لطفاً از سالم بودن فایل مطمئن شوید و دوباره تلاش کنید.";
   }
 
@@ -41,7 +51,7 @@ export function logDatabaseError(
   error: unknown,
   context?: Record<string, unknown>,
 ): void {
-  console.error(`Database operation failed: ${operation}`, {
+  logger.error(`Database operation failed: ${operation}`, {
     ...context,
     error,
   });

@@ -1,3 +1,5 @@
+import { config } from "../config.js";
+
 export interface TextChunk {
   chunkIndex: number;
   pageNumber: number;
@@ -6,8 +8,8 @@ export interface TextChunk {
 
 export function chunkText(
   text: string,
-  chunkSize = 1200,
-  overlap = 200,
+  chunkSize = config.rag.chunkSize,
+  overlap = config.rag.chunkOverlap,
 ): TextChunk[] {
   if (chunkSize <= 0 || overlap < 0 || overlap >= chunkSize) {
     throw new Error("Invalid chunkSize or overlap");
