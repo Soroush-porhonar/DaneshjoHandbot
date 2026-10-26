@@ -1,6 +1,13 @@
 import { config } from "../config.js";
 import { logger } from "../logger.js";
 import { getSelectedDocumentId } from "../db/conversations.js";
+import {
+  NO_DOCUMENT_CONTENT_TEXT,
+  NO_DOCUMENT_SELECTED_TEXT,
+  NO_RELEVANT_CONTENT_TEXT,
+  SOURCES_HEADING,
+  sourceLineText,
+} from "../messages.js";
 import { chat } from "../llm/ollamaClient.js";
 import {
   BROAD_EXTRACTION_SYSTEM_PROMPT,
@@ -9,22 +16,22 @@ import {
   buildBroadSynthesisPrompt,
   buildFocusedUserPrompt,
 } from "../llm/prompts/rag.js";
-import { getDocumentChunks, retrieveRelevantChunks } from "./retrieve.js";
+import { batchByChars } from "./batch.js";
+import { getDocumentChunks, retrieveContext } from "./retrieve.js";
 import type { RetrievalMode } from "./router.js";
 
 interface SourceChunk {
   filename: string;
   pageNumber: number | null;
   content: string;
+  /** False for neighbour chunks, which are context but not cited. */
+  isHit?: boolean;
 }
 
-const GENERATION_OPTIONS = { num_predict: 4096 };
-
-const NO_DOCUMENT_SELECTED_TEXT =
-  "هنوز جزوه‌ای برای مطالعه انتخاب نکرده‌اید.\n\n" +
-  "ابتدا /documents را ارسال کنید تا فهرست جزوه‌ها را ببینید، " +
-  "سپس با دستور /select شناسه جزوه موردنظر را انتخاب کنید.\n" +
-  "مثال: /select 1";
+const GENERATION_OPTIONS = {
+  num_predict: 4096,
+  temperature: config.llm.temperature.rag,
+};
 
 function generate(
   system: string,
@@ -57,8 +64,8 @@ export function buildSourceList(chunks: SourceChunk[]): string[] {
   return [
     ...new Set(
       chunks
-        .filter((chunk) => chunk.pageNumber != null)
-        .map((chunk) => `${chunk.filename} — صفحه PDF ${chunk.pageNumber}`),
+        .filter((chunk) => chunk.pageNumber != null && chunk.isHit !== false)
+        .map((chunk) => sourceLineText(chunk.filename, chunk.pageNumber!)),
     ),
   ];
 }
@@ -70,7 +77,7 @@ export function appendSources(answer: string, chunks: SourceChunk[]): string {
     return answer;
   }
 
-  return `${answer}\n\n**منابع بازیابی‌شده:**\n${sources
+  return `${answer}\n\n${SOURCES_HEADING}\n${sources
     .map((source) => `- ${source}`)
     .join("\n")}`;
 }
@@ -84,15 +91,16 @@ async function answerBroadQuestion(
   const chunks = await getDocumentChunks(userId, documentId);
 
   if (chunks.length === 0) {
-    return "در فایل انتخاب‌شده محتوایی برای بازیابی پیدا نکردم.";
+    return NO_DOCUMENT_CONTENT_TEXT;
   }
 
-  const batchSize = config.rag.broadBatchSize;
   const summaries: string[] = [];
 
-  for (let start = 0; start < chunks.length; start += batchSize) {
-    const batch = chunks.slice(start, start + batchSize);
-    const batchNumber = Math.floor(start / batchSize) + 1;
+  for (const [index, batch] of batchByChars(
+    chunks,
+    config.rag.broadBatchChars,
+  ).entries()) {
+    const batchNumber = index + 1;
 
     const summary = await generate(
       BROAD_EXTRACTION_SYSTEM_PROMPT,
@@ -120,15 +128,10 @@ async function answerFocusedQuestion(
   mode: "focused" | "multi_part",
   signal?: AbortSignal,
 ): Promise<string> {
-  const chunks = await retrieveRelevantChunks(
-    userId,
-    question,
-    config.rag.retrievalLimits[mode],
-    documentId,
-  );
+  const chunks = await retrieveContext(userId, question, mode, documentId);
 
   if (chunks.length === 0) {
-    return "در جزوه انتخاب‌شده مطلب مرتبطی پیدا نکردم.";
+    return NO_RELEVANT_CONTENT_TEXT;
   }
 
   const answer = await generate(

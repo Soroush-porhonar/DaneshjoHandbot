@@ -1,6 +1,6 @@
 # Daneshjoyar — AI Study Assistant
 
-**An AI-powered study assistant for Bale Messenger that answers questions from uploaded PDFs, supports contextual follow-up conversations, and manages study documents.**
+**An AI-powered study assistant for Bale Messenger that answers questions from uploaded PDFs — including scanned ones — handles follow-up questions, and manages study documents. Runs fully locally.**
 
 Built with TypeScript, Node.js, PostgreSQL, pgvector, Ollama, and Qwen 3.5 9B.
 
@@ -17,59 +17,86 @@ Built with TypeScript, Node.js, PostgreSQL, pgvector, Ollama, and Qwen 3.5 9B.
 ## Features
 
 - **PDF Management:** Upload, process, list, select, and delete study documents.
-- **Document-Grounded Q&A:** Answer questions using relevant passages retrieved from uploaded PDFs.
-- **Context-Aware Chat:** Use conversation history to handle follow-up questions.
+- **Document-Grounded Q&A:** Answer questions using passages retrieved from uploaded PDFs, with document names and page references.
+- **Scanned & Broken PDFs:** Detects pages with no text layer or broken Persian letters and reads them with a local vision model (hybrid OCR), with progress updates in the chat.
 - **Intelligent Query Routing:** Classify messages and choose between document-based answers and general chat.
-- **Adaptive Retrieval:** Apply focused, multi-part, or broad retrieval strategies based on the question.
-- **Long-Document Summarization:** Summarize document batches and combine their results into a consolidated answer.
-- **Source References:** Include document names and PDF page references in document-based answers.
+- **Adaptive Retrieval:** Focused, multi-part, or broad strategies; hits are expanded with neighbouring chunks for context.
+- **Follow-Up Understanding:** Short follow-ups ("explain more") are rewritten into standalone questions using the conversation.
+- **Long-Document Summarization:** Summarize document batches sized to the model's context window, then combine them.
+- **Non-Blocking & Cancellable:** Slow work runs in the background; `/cancel` stops a running request.
 
 ## Technical Highlights
 
-| Component          | Implementation                                                          |
-| ------------------ | ----------------------------------------------------------------------- |
-| Backend            | Node.js, TypeScript                                                     |
-| Messaging          | Bale Bot API                                                            |
-| Database           | PostgreSQL                                                              |
-| Vector search      | pgvector                                                                |
-| Embeddings         | BGE-M3                                                                  |
-| LLM inference      | Ollama, Qwen 3.5 9B                                                     |
-| Document pipeline  | PDF ingestion, text chunking, embedding generation                      |
-| Retrieval          | Vector similarity search, relevance filtering, adaptive retrieval modes |
-| Conversation state | Persistent message history and active-document selection                |
-| Deployment         | Docker                                                                  |
+| Component          | Implementation                                                                   |
+| ------------------ | -------------------------------------------------------------------------------- |
+| Backend            | Node.js, TypeScript                                                              |
+| Messaging          | Bale Bot API (long polling, idempotent update processing)                        |
+| Database           | PostgreSQL, node-pg-migrate migrations                                           |
+| Vector search      | pgvector (cosine distance, relevance threshold)                                  |
+| Embeddings         | BGE-M3 (1024-d, batched)                                                         |
+| LLM inference      | Ollama, Qwen 3.5 9B (text + vision), explicit context window and per-task sampling |
+| Document pipeline  | PDF text extraction, Persian text normalization, page-aware chunking, hybrid OCR |
+| Retrieval          | Vector search, neighbour expansion, adaptive modes, LLM query rewriting          |
+| Conversation state | Persistent message history and active-document selection                         |
+| Testing & eval     | Vitest unit tests, retrieval evaluation harness (hit@k, MRR, context coverage)   |
+| Deployment         | Docker Compose (PostgreSQL + pgvector)                                           |
 
 ## Architecture & Implementation
 
-1. **Document ingestion:** Receive PDFs through Bale, download them, extract their contents, split text into chunks, and generate embeddings.
-2. **Vector storage:** Store document chunks and metadata in PostgreSQL with pgvector for similarity-based retrieval.
-3. **Message classification:** Route incoming messages to document-based retrieval or general conversation.
-4. **Context management:** Use recent conversation history to support follow-up questions and contextual responses.
-5. **Adaptive retrieval:** Handle focused questions, multi-part questions, and broad requests using different retrieval strategies.
-6. **Answer generation:** Provide relevant document context to the LLM and generate answers with source references where available.
-7. **Document management:** Maintain user-specific documents and the currently selected document.
+1. **Document ingestion:** Receive PDFs through Bale, extract text per page, normalize Persian text (Unicode NFKC, tabs, Arabic/Persian letter variants), and detect unreadable pages.
+2. **Hybrid OCR:** Only empty or garbled pages are rendered to images and transcribed by the local vision model; every chunk records whether it came from the text layer or OCR.
+3. **Vector storage:** Page-tagged chunks and embeddings are stored in PostgreSQL with pgvector.
+4. **Message classification:** An LLM router with a JSON schema picks document retrieval or general conversation, plus the retrieval mode.
+5. **Retrieval:** Rewrite follow-ups, search by similarity, add neighbouring chunks, and cite only the pages that were actual hits.
+6. **Answer generation:** Grounded prompts with low temperature and an explicit context window; long documents use a map-reduce summary.
+7. **Reliability:** Typed errors mapped to friendly messages, background processing, request cancellation, and deduplicated updates.
+
+## Quality & Engineering
+
+- **Evaluation-driven tuning:** `npm run eval` measures retrieval on a question set (hit@k, MRR, and whether the answer page reaches the model's context) so each change is kept only if it helps.
+- **Findings from measurement:** Ollama's default 4096-token context was silently truncating long prompts, and the model's default sampling (temperature 1.0) was too random for factual answers — both fixed. A page-numbering bug in text extraction (every citation one page off, page 1 never indexed) was found and fixed.
+- **Tests:** `npm test` runs unit tests for chunking, text normalization, page-quality detection, retrieval context merging, batching, query rewriting, source citations, command parsing, and a guard that keeps every user-facing message Persian and consistent.
+- **Clean layering:** configuration, prompts, user-facing messages, SQL, and platform code each live in one place.
 
 ## Technology Stack
 
-`TypeScript` · `Node.js` · `PostgreSQL` · `pgvector` · `BGE-M3` · `Ollama` · `Qwen 3.5 9B` · `Docker` · `Bale Bot API`
+`TypeScript` · `Node.js` · `PostgreSQL` · `pgvector` · `BGE-M3` · `Ollama` · `Qwen 3.5 9B` · `Vitest` · `Docker` · `Bale Bot API`
 
 ## Project Status
 
-An actively developed personal project exploring retrieval-augmented generation (RAG), context-aware conversations, document retrieval strategies, and LLM-powered study assistance.
+An actively developed personal project exploring retrieval-augmented generation (RAG), local vision-based OCR, context-aware conversations, document retrieval strategies, and LLM-powered study assistance.
 
 ## Project structure
 
 ```
 src/
   main.ts            entry point: health endpoint + Bale polling
-  config.ts          all env vars and tunables (models, timeouts, chunk size, thresholds)
+  config.ts          all env vars and tunables (models, context size, timeouts, chunking, OCR)
+  messages.ts        every user-facing text (Persian)
   logger.ts          leveled logger (LOG_LEVEL=debug|info|warn|error)
-  errors.ts          typed errors and user-facing error text
+  errors.ts          typed errors mapped to user-facing text
   bale.ts            Bale API client (messages, updates, file download)
-  bot/               polling loop, update dispatcher, commands, Persian copy
-  chat/              message pipeline (chatService) and PDF upload flow
-  llm/               Ollama client (chat + embeddings) and prompts
-  rag/               router, ingest, chunking, retrieval, answer generation
+  bot/               polling loop, update dispatcher, commands
+  chat/              message pipeline and PDF upload flow
+  llm/               Ollama client (chat, vision, embeddings) and prompts
+  rag/               router, ingest, OCR, chunking, retrieval, query rewriting, answers
   db/                one module per table; all SQL lives here
-tests/               vitest unit tests (`npm test`)
+migrations/          node-pg-migrate schema migrations
+scripts/             eval harness, data reset, local PDF ingestion
+eval/                retrieval evaluation questions
+tests/               vitest unit tests
 ```
+
+## Getting started
+
+```bash
+docker compose up -d          # PostgreSQL + pgvector
+npm install
+npm run migrate:up
+ollama pull qwen3.5:9b && ollama pull bge-m3
+npm run dev                   # start the bot
+npm test                      # unit tests
+npm run eval                  # retrieval evaluation
+```
+
+Configure `.env` with `BALE_TOKEN`, `DATABASE_URL`, `LLM_URL`, `LLM_MODEL`, `EMBEDDING_MODEL`, `PORT`, and the Postgres credentials.

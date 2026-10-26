@@ -1,11 +1,13 @@
 import { downloadBaleDocument, sendMessage } from "../bale.js";
 import type { BaleDocument } from "../bale.js";
 import {
-  FILE_PROCESSED_TEXT,
+  fileProcessedText,
   FILE_RECEIVED_TEXT,
   FILE_TOO_LARGE_TEXT,
   NOT_A_PDF_TEXT,
-} from "../bot/messages.js";
+  ocrProgressText,
+  ocrStartedText,
+} from "../messages.js";
 import { config } from "../config.js";
 import { findOrCreateUser } from "../db/users.js";
 import { getDocumentErrorText, getErrorMessage } from "../errors.js";
@@ -48,9 +50,21 @@ export async function handleDocument(
     const user = await findOrCreateUser(String(chatId));
     const downloaded = await downloadBaleDocument(document);
 
-    await ingestPdf(user.id, downloaded.filename, downloaded.filePath);
+    const result = await ingestPdf(
+      user.id,
+      downloaded.filename,
+      downloaded.filePath,
+      async ({ ocrDone, ocrTotal, skipped }) => {
+        await sendMessage(
+          chatId,
+          ocrDone === 0
+            ? ocrStartedText(ocrTotal, skipped)
+            : ocrProgressText(ocrDone, ocrTotal),
+        );
+      },
+    );
 
-    await sendMessage(chatId, FILE_PROCESSED_TEXT);
+    await sendMessage(chatId, fileProcessedText(result.ocrPages));
 
     return true;
   } catch (error: unknown) {

@@ -10,9 +10,18 @@ const chunk = (pageNumber: number | null) => ({
 describe("sources", () => {
   it("deduplicates pages and skips unknown ones", () => {
     expect(buildSourceList([chunk(2), chunk(2), chunk(null), chunk(5)])).toEqual([
-      "notes.pdf — صفحه PDF 2",
-      "notes.pdf — صفحه PDF 5",
+      "notes.pdf — صفحه 2",
+      "notes.pdf — صفحه 5",
     ]);
+  });
+
+  it("cites only real hits, not neighbour chunks", () => {
+    expect(
+      buildSourceList([
+        { ...chunk(3), isHit: true },
+        { ...chunk(4), isHit: false },
+      ]),
+    ).toEqual(["notes.pdf — صفحه 3"]);
   });
 
   it("returns the answer unchanged when there are no sources", () => {
@@ -20,6 +29,6 @@ describe("sources", () => {
   });
 
   it("appends a sources section", () => {
-    expect(appendSources("answer", [chunk(1)])).toContain("- notes.pdf — صفحه PDF 1");
+    expect(appendSources("answer", [chunk(1)])).toContain("- notes.pdf — صفحه 1");
   });
 });

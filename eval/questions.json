@@ -1,0 +1,120 @@
+[
+  {
+    "id": "ds1-fact-iter",
+    "mode": "focused",
+    "question": "تابع فاکتوریل به صورت غیر بازگشتی چگونه نوشته می‌شود؟",
+    "expectedPages": [
+      10
+    ],
+    "filename": "DataStructure_Chapter1.pdf"
+  },
+  {
+    "id": "ds1-q-14-3",
+    "mode": "focused",
+    "question": "مقدار Q(14,3) چند می‌شود و چگونه محاسبه می‌شود؟",
+    "expectedPages": [
+      22
+    ],
+    "filename": "DataStructure_Chapter1.pdf"
+  },
+  {
+    "id": "ds1-hanoi",
+    "mode": "focused",
+    "question": "تابع بازگشتی مسئله برج‌های هانوی را توضیح بده",
+    "expectedPages": [
+      30
+    ],
+    "filename": "DataStructure_Chapter1.pdf"
+  },
+  {
+    "id": "ds1-recursion-stack",
+    "mode": "multi_part",
+    "question": "فراخوانی‌های بازگشتی را چگونه نمایش می‌دهیم و پشته چه نقشی دارد؟",
+    "expectedPages": [
+      18
+    ],
+    "filename": "DataStructure_Chapter1.pdf"
+  },
+  {
+    "id": "ds2-notation",
+    "mode": "multi_part",
+    "question": "رابطه بین نمادهای O و Ω و Θ چیست؟",
+    "expectedPages": [
+      30
+    ],
+    "filename": "DataStructure_Chapter2.pdf"
+  },
+  {
+    "id": "ds2-time-factors",
+    "mode": "focused",
+    "question": "فاکتورهای مهم ارزیابی یک الگوریتم کدامند؟",
+    "expectedPages": [
+      2
+    ],
+    "filename": "DataStructure_Chapter2.pdf"
+  },
+  {
+    "id": "ds2-recursive-order",
+    "mode": "focused",
+    "question": "مرتبه اجرایی توابع بازگشتی را چطور محاسبه می‌کنیم؟",
+    "expectedPages": [
+      34
+    ],
+    "filename": "DataStructure_Chapter2.pdf"
+  },
+  {
+    "id": "alg-kruskal",
+    "mode": "focused",
+    "question": "الگوریتم کروسکال چه ویژگی‌ای دارد و زمان اجرای آن به چه چیزی بستگی دارد؟",
+    "expectedPages": [
+      18
+    ],
+    "filename": "Algorithm-Chapter4.pdf"
+  },
+  {
+    "id": "alg-dijkstra",
+    "mode": "focused",
+    "question": "الگوریتم دایجکسترا چگونه کار می‌کند؟",
+    "expectedPages": [
+      22
+    ],
+    "filename": "Algorithm-Chapter4.pdf"
+  },
+  {
+    "id": "alg-huffman",
+    "mode": "focused",
+    "question": "الگوریتم هافمن برای چه کاری استفاده می‌شود؟",
+    "expectedPages": [
+      26
+    ],
+    "filename": "Algorithm-Chapter4.pdf"
+  },
+  {
+    "id": "alg-prim-vs-tree",
+    "mode": "multi_part",
+    "question": "درخت پوشا چیست و الگوریتم پریم چه محدودیت‌هایی دارد؟",
+    "expectedPages": [
+      6,
+      14
+    ],
+    "filename": "Algorithm-Chapter4.pdf"
+  },
+  {
+    "id": "lisbon-cause",
+    "mode": "focused",
+    "question": "علت طبیعی زلزله لیسبون چه بود و این پرسش چه تغییری در تفکر ایجاد کرد؟",
+    "expectedPages": [
+      4
+    ],
+    "filename": "زلزلهٔ لیسبون ۱۷۵۵.pdf"
+  },
+  {
+    "id": "lisbon-rebuild",
+    "mode": "focused",
+    "question": "لیسبون پس از زلزله چگونه بازسازی شد؟",
+    "expectedPages": [
+      9
+    ],
+    "filename": "زلزلهٔ لیسبون ۱۷۵۵.pdf"
+  }
+]

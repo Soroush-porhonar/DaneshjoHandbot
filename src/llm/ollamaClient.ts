@@ -5,6 +5,8 @@ import { logger } from "../logger.js";
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
   content: string;
+  /** Base64-encoded images for vision models. */
+  images?: string[];
 }
 
 export interface ChatRequest {
@@ -23,6 +25,7 @@ interface OllamaChatResponse {
   message?: { content?: string };
   done_reason?: string;
   eval_count?: number;
+  prompt_eval_count?: number;
 }
 
 interface OllamaEmbedResponse {
@@ -81,7 +84,7 @@ export async function chat(request: ChatRequest): Promise<string> {
       messages: request.messages,
       ...(request.think !== undefined ? { think: request.think } : {}),
       ...(request.format ? { format: request.format } : {}),
-      ...(request.options ? { options: request.options } : {}),
+      options: { num_ctx: config.llm.numCtx, ...request.options },
     },
     withTimeout(request.timeoutMs ?? config.llm.timeoutMs, request.signal),
     "chat",
@@ -89,8 +92,18 @@ export async function chat(request: ChatRequest): Promise<string> {
 
   logger.debug("[LLM] chat finished", {
     doneReason: data.done_reason,
+    promptTokens: data.prompt_eval_count,
     tokens: data.eval_count,
   });
+
+  const numCtx = Number(request.options?.num_ctx ?? config.llm.numCtx);
+  const used = (data.prompt_eval_count ?? 0) + (data.eval_count ?? 0);
+
+  if (used >= numCtx * 0.9) {
+    logger.warn(
+      `[LLM] Context nearly full (${used}/${numCtx} tokens); the prompt may be truncated`,
+    );
+  }
 
   const content = data.message?.content;
 

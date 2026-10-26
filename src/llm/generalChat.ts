@@ -1,4 +1,5 @@
 import type { ChatHistoryMessage } from "../db/messages.js";
+import { config } from "../config.js";
 import { chat } from "./ollamaClient.js";
 import { CHAT_SYSTEM_PROMPT } from "./prompts/chat.js";
 
@@ -9,6 +10,7 @@ export async function askAI(
 ): Promise<string> {
   return chat({
     messages: [{ role: "system", content: CHAT_SYSTEM_PROMPT }, ...history],
+    options: { temperature: config.llm.temperature.chat },
     signal,
   });
 }

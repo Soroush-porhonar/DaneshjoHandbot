@@ -1,30 +1,40 @@
 import { describe, expect, it } from "vitest";
-import { chunkText } from "../src/rag/chunk.js";
+import { chunkPages } from "../src/rag/chunk.js";
 
-describe("chunkText", () => {
-  it("returns no chunks for empty text", () => {
-    expect(chunkText("   ")).toEqual([]);
+describe("chunkPages", () => {
+  it("returns no chunks for empty pages", () => {
+    expect(chunkPages([{ pageNumber: 1, text: "  \n " }])).toEqual([]);
   });
 
-  it("keeps the page number from the page marker", () => {
-    const chunks = chunkText("-- 1 of 2 --\nfirst page\n-- 2 of 2 --\nsecond page");
-
-    expect(chunks.map((c) => [c.pageNumber, c.content])).toEqual([
-      [1, "first page"],
-      [2, "second page"],
+  it("keeps each page's number and numbers chunks continuously", () => {
+    const chunks = chunkPages([
+      { pageNumber: 1, text: "first page", method: "text" },
+      { pageNumber: 2, text: "second page", method: "ocr" },
     ]);
-    expect(chunks.map((c) => c.chunkIndex)).toEqual([0, 1]);
+
+    expect(
+      chunks.map((c) => [c.chunkIndex, c.pageNumber, c.content, c.method]),
+    ).toEqual([
+      [0, 1, "first page", "text"],
+      [1, 2, "second page", "ocr"],
+    ]);
   });
 
   it("splits long pages into overlapping chunks no larger than chunkSize", () => {
-    const chunks = chunkText(`-- 1 of 1 --\n${"word ".repeat(100)}`, 100, 20);
+    const chunks = chunkPages([{ pageNumber: 3, text: "word ".repeat(100), method: "text" }], 100, 20);
 
     expect(chunks.length).toBeGreaterThan(1);
     expect(chunks.every((c) => c.content.length <= 100)).toBe(true);
-    expect(chunks.every((c) => c.pageNumber === 1)).toBe(true);
+    expect(chunks.every((c) => c.pageNumber === 3)).toBe(true);
+  });
+
+  it("normalizes text before chunking", () => {
+    const [chunk] = chunkPages([{ pageNumber: 1, text: "مثال\t6\t:" }]);
+
+    expect(chunk?.content).toBe("مثال 6 :");
   });
 
   it("rejects an overlap that is not smaller than the chunk size", () => {
-    expect(() => chunkText("x", 100, 100)).toThrow();
+    expect(() => chunkPages([], 100, 100)).toThrow();
   });
 });

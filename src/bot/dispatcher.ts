@@ -5,7 +5,7 @@ import { handleDocument } from "../chat/documentUpload.js";
 import { isUpdateProcessed, markUpdateProcessed } from "../db/updates.js";
 import { logger } from "../logger.js";
 import { cancelRequest, finishRequest, startRequest } from "./cancellation.js";
-import { NO_REQUEST_TO_CANCEL_TEXT, REQUEST_CANCELLED_TEXT } from "./messages.js";
+import { NO_REQUEST_TO_CANCEL_TEXT, REQUEST_CANCELLED_TEXT } from "../messages.js";
 
 /**
  * Runs slow work (LLM calls, PDF ingestion) without blocking the polling loop,

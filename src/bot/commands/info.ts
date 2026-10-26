@@ -1,4 +1,4 @@
-import { ABOUT_TEXT, HELP_TEXT, START_TEXT } from "../messages.js";
+import { ABOUT_TEXT, HELP_TEXT, START_TEXT } from "../../messages.js";
 import type { CommandHandler } from "./types.js";
 
 export const startCommand: CommandHandler = async () => START_TEXT;

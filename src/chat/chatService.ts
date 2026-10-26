@@ -4,7 +4,7 @@ import {
   PROCESSING_FAILED_TEXT,
   SAVE_MESSAGE_FAILED_TEXT,
   THINKING_NOTICE_TEXT,
-} from "../bot/messages.js";
+} from "../messages.js";
 import { config } from "../config.js";
 import { findOrCreateConversation } from "../db/conversations.js";
 import { listCompletedFilenames } from "../db/documents.js";
@@ -14,6 +14,7 @@ import { logDatabaseError } from "../errors.js";
 import { askAI } from "../llm/generalChat.js";
 import { logger } from "../logger.js";
 import { answerFromDocuments } from "../rag/answer.js";
+import { rewriteQuestion } from "../rag/rewrite.js";
 import { routeMessage } from "../rag/router.js";
 
 interface Session {
@@ -54,9 +55,12 @@ async function answerQuestion(
   const classification = await routeMessage(text, documentNames, history);
 
   if (classification.route === "document") {
+    // The current message is already saved, so it is the last history entry.
+    const question = await rewriteQuestion(text, history.slice(0, -1), signal);
+
     return answerFromDocuments(
       userId,
-      text,
+      question,
       classification.retrievalMode,
       signal,
     );

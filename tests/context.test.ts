@@ -1,0 +1,42 @@
+import { describe, expect, it } from "vitest";
+import { mergeContext } from "../src/rag/retrieve.js";
+import type { ContextChunk } from "../src/rag/retrieve.js";
+
+const chunk = (chunkIndex: number): ContextChunk => ({
+  documentId: 1,
+  filename: "a.pdf",
+  pageNumber: chunkIndex,
+  chunkIndex,
+  content: `c${chunkIndex}`,
+  isHit: false,
+});
+
+const indexes = (chunks: ContextChunk[]) => chunks.map((c) => c.chunkIndex);
+
+describe("mergeContext", () => {
+  it("returns hits and neighbours in reading order without duplicates", () => {
+    const merged = mergeContext([chunk(10)], [chunk(9), chunk(11), chunk(9)], 5);
+
+    expect(indexes(merged)).toEqual([9, 10, 11]);
+  });
+
+  it("never drops a hit to make room for a neighbour", () => {
+    const merged = mergeContext([chunk(10), chunk(20)], [chunk(9), chunk(19)], 2);
+
+    expect(indexes(merged)).toEqual([10, 20]);
+  });
+
+  it("prefers neighbours of the best-ranked hit when capped", () => {
+    const merged = mergeContext(
+      [chunk(30), chunk(10)],
+      [chunk(9), chunk(11), chunk(29), chunk(31)],
+      4,
+    );
+
+    expect(indexes(merged)).toEqual([10, 29, 30, 31]);
+  });
+
+  it("handles no neighbours", () => {
+    expect(indexes(mergeContext([chunk(3), chunk(1)], [], 5))).toEqual([1, 3]);
+  });
+});
