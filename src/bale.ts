@@ -1,17 +1,17 @@
-import "dotenv/config";
-import { BALE_TOKEN } from "./utils/env.js";
+import { config } from "./config.js";
+import { logger } from "./logger.js";
 import path from "node:path";
 import { mkdir, open, writeFile } from "node:fs/promises";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 
-const BASE_URL = `https://tapi.bale.ai/bot${BALE_TOKEN}`;
-const FILE_BASE_URL = `https://tapi.bale.ai/file/bot${BALE_TOKEN}`;
+const BASE_URL = `https://tapi.bale.ai/bot${config.baleToken}`;
+const FILE_BASE_URL = `https://tapi.bale.ai/file/bot${config.baleToken}`;
 
-const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
-const MAX_MESSAGE_LENGTH = 4000;
+const MAX_FILE_SIZE = config.bale.maxFileSize;
+const MAX_MESSAGE_LENGTH = config.bale.maxMessageLength;
 
-function splitMessage(text: string): string[] {
+export function splitMessage(text: string): string[] {
   const parts: string[] = [];
   let remaining = text.trim();
 
@@ -76,7 +76,7 @@ async function callBale<T>(
       "Content-Type": "application/json",
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(config.bale.apiTimeoutMs),
   });
 
   let data: BaleResponse<T>;
@@ -102,7 +102,7 @@ export async function sendMessage(chatId: number, text: string): Promise<void> {
   const parts = splitMessage(text);
 
   for (const [index, part] of parts.entries()) {
-    console.log(
+    logger.debug(
       `[Bale] Sending part ${index + 1}/${parts.length}, length: ${part.length}`,
     );
 
@@ -195,7 +195,7 @@ export async function downloadBaleDocument(
     throw new Error("The file exceeds Bale's 20 MB download limit.");
   }
   const response = await fetch(`${FILE_BASE_URL}/${fileInfo.file_path}`, {
-    signal: AbortSignal.timeout(60_000),
+    signal: AbortSignal.timeout(config.bale.downloadTimeoutMs),
   });
 
   if (!response.ok) {

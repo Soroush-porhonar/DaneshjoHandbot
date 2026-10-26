@@ -1,13 +1,12 @@
-import "dotenv/config";
 import { Pool } from "pg";
-
-const connectionString = process.env.DATABASE_URL;
+import { config } from "../config.js";
+import { logger } from "../logger.js";
 
 export const pool = new Pool({
-  connectionString,
+  connectionString: config.databaseUrl,
   max: 10,
 });
 
 pool.on("error", (error) => {
-  console.error("Unexpected PostgreSQL pool error:", error);
+  logger.error("Unexpected PostgreSQL pool error:", error);
 });

@@ -1,7 +1,7 @@
 import { pool } from "../db/pool.js";
+import { config } from "../config.js";
+import { logger } from "../logger.js";
 import { generateEmbedding } from "./embeddings.js";
-
-const MAX_COSINE_DISTANCE = 0.55;
 
 export interface RetrievedChunk {
   documentId: number;
@@ -105,9 +105,9 @@ export async function retrieveRelevantChunks(
        AND distance <= $5
      ORDER BY distance ASC
      LIMIT $3`,
-    [userId, vector, limit, documentId ?? null, MAX_COSINE_DISTANCE],
+    [userId, vector, limit, documentId ?? null, config.rag.maxCosineDistance],
   );
-  console.log(
+  logger.debug(
     "[RAG] Retrieved chunks:",
     result.rows.map((chunk) => ({
       documentId: chunk.documentId,

@@ -56,3 +56,20 @@ Built with TypeScript, Node.js, PostgreSQL, pgvector, Ollama, and Qwen 3.5 9B.
 ## Project Status
 
 An actively developed personal project exploring retrieval-augmented generation (RAG), context-aware conversations, document retrieval strategies, and LLM-powered study assistance.
+
+## Project structure
+
+```
+src/
+  main.ts            entry point: health endpoint + Bale polling
+  config.ts          all env vars and tunables (models, timeouts, chunk size, thresholds)
+  logger.ts          leveled logger (LOG_LEVEL=debug|info|warn|error)
+  errors.ts          typed errors and user-facing error text
+  bale.ts            Bale API client (messages, updates, file download)
+  bot/               polling loop, update dispatcher, commands, Persian copy
+  chat/              message pipeline (chatService) and PDF upload flow
+  llm/               Ollama client (chat + embeddings) and prompts
+  rag/               router, ingest, chunking, retrieval, answer generation
+  db/                one module per table; all SQL lives here
+tests/               vitest unit tests (`npm test`)
+```

@@ -1,7 +1,11 @@
 import { pool } from "../db/pool.js";
 import { extractPdfText } from "./pdf.js";
 import { chunkText } from "./chunk.js";
-import { generateEmbedding } from "./embeddings.js";
+import { generateEmbeddings } from "./embeddings.js";
+import { PdfExtractError } from "../errors.js";
+import { logger } from "../logger.js";
+
+const EMBED_BATCH_SIZE = 16;
 
 export async function ingestPdf(
   userId: number,
@@ -30,26 +34,30 @@ export async function ingestPdf(
     const chunks = chunkText(text);
 
     if (chunks.length === 0) {
-      throw new Error("The PDF contains no usable text");
+      throw new PdfExtractError("The PDF contains no usable text");
     }
 
     // Generate embeddings before opening the transaction.
-    const embeddedChunks = [];
+    const embeddedChunks: {
+      chunkIndex: number;
+      pageNumber: number;
+      content: string;
+      embedding: number[];
+    }[] = [];
 
-    for (const chunk of chunks) {
-      const embedding = await generateEmbedding(chunk.content);
+    for (let start = 0; start < chunks.length; start += EMBED_BATCH_SIZE) {
+      const batch = chunks.slice(start, start + EMBED_BATCH_SIZE);
+      const embeddings = await generateEmbeddings(
+        batch.map((chunk) => chunk.content),
+      );
 
-      if (embedding.length !== 1024 || !embedding.every(Number.isFinite)) {
-        throw new Error(
-          `Invalid embedding for chunk ${chunk.chunkIndex}: expected 1024 finite values`,
-        );
-      }
-
-      embeddedChunks.push({
-        chunkIndex: chunk.chunkIndex,
-        pageNumber: chunk.pageNumber,
-        content: chunk.content,
-        embedding,
+      batch.forEach((chunk, index) => {
+        embeddedChunks.push({
+          chunkIndex: chunk.chunkIndex,
+          pageNumber: chunk.pageNumber,
+          content: chunk.content,
+          embedding: embeddings[index]!,
+        });
       });
     }
 
@@ -101,7 +109,7 @@ export async function ingestPdf(
       try {
         await client.query("ROLLBACK");
       } catch (rollbackError: unknown) {
-        console.error("Failed to roll back document ingestion:", {
+        logger.error("Failed to roll back document ingestion:", {
           documentId,
           error: rollbackError,
         });
@@ -112,7 +120,7 @@ export async function ingestPdf(
       client.release();
     }
 
-    console.log(`Document ${documentId} ingested: ${chunks.length} chunks`);
+    logger.info(`Document ${documentId} ingested: ${chunks.length} chunks`);
 
     return documentId;
   } catch (error: unknown) {
@@ -121,7 +129,7 @@ export async function ingestPdf(
         documentId,
       ]);
     } catch (statusError: unknown) {
-      console.error("Failed to update document status:", statusError);
+      logger.error("Failed to update document status:", statusError);
     }
 
     throw error;

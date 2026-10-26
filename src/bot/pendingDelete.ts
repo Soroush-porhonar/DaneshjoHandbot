@@ -14,6 +14,7 @@ export function setPendingDeletion(chatId: number, documentId: number): void {
   });
 }
 
+/** Returns the document awaiting deletion confirmation, or null if none/expired. */
 export function getPendingDeletion(chatId: number): number | null {
   const pending = pendingDeletions.get(chatId);
 
