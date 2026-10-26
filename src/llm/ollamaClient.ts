@@ -5,6 +5,8 @@ import { logger } from "../logger.js";
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
   content: string;
+  /** Base64-encoded images for vision models. */
+  images?: string[];
 }
 
 export interface ChatRequest {

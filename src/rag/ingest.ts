@@ -1,17 +1,27 @@
 import { pool } from "../db/pool.js";
-import { extractPdfPages } from "./pdf.js";
+import { openPdf } from "./pdf.js";
 import { chunkPages } from "./chunk.js";
+import { extractPages } from "./ocr.js";
+import type { ExtractionProgress } from "./ocr.js";
 import { generateEmbeddings } from "./embeddings.js";
 import { PdfExtractError } from "../errors.js";
 import { logger } from "../logger.js";
 
 const EMBED_BATCH_SIZE = 16;
 
+export interface IngestResult {
+  documentId: number;
+  pageCount: number;
+  /** Pages whose text came from the vision model instead of the PDF's text layer. */
+  ocrPages: number;
+}
+
 export async function ingestPdf(
   userId: number,
   filename: string,
   filePath: string,
-): Promise<number> {
+  onProgress?: (progress: ExtractionProgress) => Promise<void> | void,
+): Promise<IngestResult> {
   const documentResult = await pool.query<{ id: number }>(
     `
       INSERT INTO documents (user_id, filename, status)
@@ -30,8 +40,16 @@ export async function ingestPdf(
   const documentId = document.id;
 
   try {
-    const pages = await extractPdfPages(filePath);
-    const chunks = chunkPages(pages);
+    const pdf = await openPdf(filePath);
+    let extraction;
+
+    try {
+      extraction = await extractPages(pdf, onProgress);
+    } finally {
+      await pdf.close();
+    }
+
+    const chunks = chunkPages(extraction.pages);
 
     if (chunks.length === 0) {
       throw new PdfExtractError("The PDF contains no usable text");
@@ -42,6 +60,7 @@ export async function ingestPdf(
       chunkIndex: number;
       pageNumber: number;
       content: string;
+      method: "text" | "ocr";
       embedding: number[];
     }[] = [];
 
@@ -56,6 +75,7 @@ export async function ingestPdf(
           chunkIndex: chunk.chunkIndex,
           pageNumber: chunk.pageNumber,
           content: chunk.content,
+          method: chunk.method,
           embedding: embeddings[index]!,
         });
       });
@@ -72,14 +92,15 @@ export async function ingestPdf(
 
         await client.query(
           `INSERT INTO document_chunks
-     (document_id, chunk_index, page_number, content, embedding)
-   VALUES ($1, $2, $3, $4, $5::vector)`,
+     (document_id, chunk_index, page_number, content, embedding, extraction_method)
+   VALUES ($1, $2, $3, $4, $5::vector, $6)`,
           [
             documentId,
             chunk.chunkIndex,
             chunk.pageNumber,
             chunk.content,
             vector,
+            chunk.method,
           ],
         );
       }
@@ -122,7 +143,11 @@ export async function ingestPdf(
 
     logger.info(`Document ${documentId} ingested: ${chunks.length} chunks`);
 
-    return documentId;
+    return {
+      documentId,
+      pageCount: extraction.pages.length,
+      ocrPages: extraction.ocrPages,
+    };
   } catch (error: unknown) {
     try {
       await pool.query(`UPDATE documents SET status = 'failed' WHERE id = $1`, [

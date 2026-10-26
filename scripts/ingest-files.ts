@@ -22,8 +22,11 @@ for (const file of files) {
   const started = Date.now();
 
   try {
-    const id = await ingestPdf(user.id, filename, file);
-    console.log(`OK   #${id} ${filename} (${Math.round((Date.now() - started) / 1000)}s)`);
+    const result = await ingestPdf(user.id, filename, file);
+    console.log(
+      `OK   #${result.documentId} ${filename} (${Math.round((Date.now() - started) / 1000)}s, ` +
+        `${result.pageCount} pages, ${result.ocrPages} OCR)`,
+    );
   } catch (error) {
     console.error(`FAIL ${filename}:`, error instanceof Error ? error.message : error);
   }

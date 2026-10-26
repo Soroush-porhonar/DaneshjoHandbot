@@ -8,18 +8,20 @@ describe("chunkPages", () => {
 
   it("keeps each page's number and numbers chunks continuously", () => {
     const chunks = chunkPages([
-      { pageNumber: 1, text: "first page" },
-      { pageNumber: 2, text: "second page" },
+      { pageNumber: 1, text: "first page", method: "text" },
+      { pageNumber: 2, text: "second page", method: "ocr" },
     ]);
 
-    expect(chunks.map((c) => [c.chunkIndex, c.pageNumber, c.content])).toEqual([
-      [0, 1, "first page"],
-      [1, 2, "second page"],
+    expect(
+      chunks.map((c) => [c.chunkIndex, c.pageNumber, c.content, c.method]),
+    ).toEqual([
+      [0, 1, "first page", "text"],
+      [1, 2, "second page", "ocr"],
     ]);
   });
 
   it("splits long pages into overlapping chunks no larger than chunkSize", () => {
-    const chunks = chunkPages([{ pageNumber: 3, text: "word ".repeat(100) }], 100, 20);
+    const chunks = chunkPages([{ pageNumber: 3, text: "word ".repeat(100), method: "text" }], 100, 20);
 
     expect(chunks.length).toBeGreaterThan(1);
     expect(chunks.every((c) => c.content.length <= 100)).toBe(true);

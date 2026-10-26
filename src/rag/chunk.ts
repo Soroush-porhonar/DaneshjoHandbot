@@ -1,11 +1,12 @@
 import { config } from "../config.js";
-import type { PageText } from "./pdf.js";
+import type { ExtractionMethod, PageText } from "./pdf.js";
 import { normalizeText } from "./textQuality.js";
 
 export interface TextChunk {
   chunkIndex: number;
   pageNumber: number;
   content: string;
+  method: ExtractionMethod;
 }
 
 /** Sentence/paragraph terminators, strongest first. */
@@ -64,13 +65,13 @@ export function chunkPages(
 
   const chunks: TextChunk[] = [];
 
-  for (const { pageNumber, text } of pages) {
+  for (const { pageNumber, text, method } of pages) {
     const page = normalizeText(text);
 
     if (!page) continue;
 
     for (const content of splitPage(page, chunkSize, overlap)) {
-      chunks.push({ chunkIndex: chunks.length, pageNumber, content });
+      chunks.push({ chunkIndex: chunks.length, pageNumber, content, method });
     }
   }
 

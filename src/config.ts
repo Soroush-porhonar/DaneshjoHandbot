@@ -38,6 +38,17 @@ export const config = {
     historyLimit: 10,
   },
 
+  ocr: {
+    enabled: process.env.OCR_ENABLED !== "false",
+    /** Pages with fewer characters than this are treated as images. */
+    minChars: 20,
+    /** Maximum pages OCR'd per document (CPU inference is slow). */
+    maxPages: 30,
+    imageWidth: 1000,
+    timeoutMs: 300_000,
+    progressEvery: 5,
+  },
+
   bale: {
     maxFileSize: 20 * 1024 * 1024,
     maxMessageLength: 4000,

@@ -176,6 +176,23 @@ export const FILE_TOO_LARGE_TEXT = "حجم فایل بیشتر از محدودی
 export const FILE_RECEIVED_TEXT =
   "فایل شما دریافت شد. در حال پردازش و آماده‌سازی برای پاسخ‌گویی هستم...";
 
+export const ocrStartedText = (total: number, skipped: number): string =>
+  `🔍 ${total} صفحه از این فایل متن قابل‌خواندن ندارد (اسکن‌شده یا خراب است) و با هوش مصنوعی خوانده می‌شود. ` +
+  `این کار ممکن است چند دقیقه طول بکشد.` +
+  (skipped > 0
+    ? `
+⚠️ ${skipped} صفحه دیگر به‌دلیل محدودیت تعداد صفحه خوانده نمی‌شود.`
+    : "");
+
+export const ocrProgressText = (done: number, total: number): string =>
+  `⏳ خواندن صفحه‌ها: ${done} از ${total}`;
+
+export const fileProcessedText = (ocrPages: number): string =>
+  FILE_PROCESSED_TEXT +
+  (ocrPages > 0 ? `
+
+(${ocrPages} صفحه با تشخیص متن خوانده شد.)` : "");
+
 export const FILE_PROCESSED_TEXT = `✅ فایل PDF با موفقیت پردازش شد و به‌عنوان **سند فعال** انتخاب شد.
 
 از این به بعد می‌تونی مستقیماً سؤالاتت رو درباره همین فایل بپرسی.
