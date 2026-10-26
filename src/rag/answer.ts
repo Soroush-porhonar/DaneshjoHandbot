@@ -1,6 +1,13 @@
 import { config } from "../config.js";
 import { logger } from "../logger.js";
 import { getSelectedDocumentId } from "../db/conversations.js";
+import {
+  NO_DOCUMENT_CONTENT_TEXT,
+  NO_DOCUMENT_SELECTED_TEXT,
+  NO_RELEVANT_CONTENT_TEXT,
+  SOURCES_HEADING,
+  sourceLineText,
+} from "../messages.js";
 import { chat } from "../llm/ollamaClient.js";
 import {
   BROAD_EXTRACTION_SYSTEM_PROMPT,
@@ -25,12 +32,6 @@ const GENERATION_OPTIONS = {
   num_predict: 4096,
   temperature: config.llm.temperature.rag,
 };
-
-const NO_DOCUMENT_SELECTED_TEXT =
-  "هنوز جزوه‌ای برای مطالعه انتخاب نکرده‌اید.\n\n" +
-  "ابتدا /documents را ارسال کنید تا فهرست جزوه‌ها را ببینید، " +
-  "سپس با دستور /select شناسه جزوه موردنظر را انتخاب کنید.\n" +
-  "مثال: /select 1";
 
 function generate(
   system: string,
@@ -64,7 +65,7 @@ export function buildSourceList(chunks: SourceChunk[]): string[] {
     ...new Set(
       chunks
         .filter((chunk) => chunk.pageNumber != null && chunk.isHit !== false)
-        .map((chunk) => `${chunk.filename} — صفحه PDF ${chunk.pageNumber}`),
+        .map((chunk) => sourceLineText(chunk.filename, chunk.pageNumber!)),
     ),
   ];
 }
@@ -76,7 +77,7 @@ export function appendSources(answer: string, chunks: SourceChunk[]): string {
     return answer;
   }
 
-  return `${answer}\n\n**منابع بازیابی‌شده:**\n${sources
+  return `${answer}\n\n${SOURCES_HEADING}\n${sources
     .map((source) => `- ${source}`)
     .join("\n")}`;
 }
@@ -90,7 +91,7 @@ async function answerBroadQuestion(
   const chunks = await getDocumentChunks(userId, documentId);
 
   if (chunks.length === 0) {
-    return "در فایل انتخاب‌شده محتوایی برای بازیابی پیدا نکردم.";
+    return NO_DOCUMENT_CONTENT_TEXT;
   }
 
   const summaries: string[] = [];
@@ -130,7 +131,7 @@ async function answerFocusedQuestion(
   const chunks = await retrieveContext(userId, question, mode, documentId);
 
   if (chunks.length === 0) {
-    return "در جزوه انتخاب‌شده مطلب مرتبطی پیدا نکردم.";
+    return NO_RELEVANT_CONTENT_TEXT;
   }
 
   const answer = await generate(

@@ -4,7 +4,7 @@ import {
   PROCESSING_FAILED_TEXT,
   SAVE_MESSAGE_FAILED_TEXT,
   THINKING_NOTICE_TEXT,
-} from "../bot/messages.js";
+} from "../messages.js";
 import { config } from "../config.js";
 import { findOrCreateConversation } from "../db/conversations.js";
 import { listCompletedFilenames } from "../db/documents.js";

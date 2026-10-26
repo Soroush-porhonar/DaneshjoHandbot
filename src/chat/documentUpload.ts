@@ -7,7 +7,7 @@ import {
   NOT_A_PDF_TEXT,
   ocrProgressText,
   ocrStartedText,
-} from "../bot/messages.js";
+} from "../messages.js";
 import { config } from "../config.js";
 import { findOrCreateUser } from "../db/users.js";
 import { getDocumentErrorText, getErrorMessage } from "../errors.js";

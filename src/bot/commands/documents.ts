@@ -18,7 +18,7 @@ import {
   deleteSucceededText,
   documentsListText,
   selectedText,
-} from "../messages.js";
+} from "../../messages.js";
 import {
   clearPendingDeletion,
   getPendingDeletion,

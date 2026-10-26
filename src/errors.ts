@@ -1,4 +1,10 @@
 import { logger } from "./logger.js";
+import {
+  AI_UNAVAILABLE_TEXT,
+  FILE_PROCESSING_FAILED_TEXT,
+  FILE_TIMEOUT_TEXT,
+  PDF_UNREADABLE_TEXT,
+} from "./messages.js";
 
 /** The Ollama service failed, was unreachable, or returned bad data. */
 export class OllamaError extends Error {
@@ -32,18 +38,18 @@ function isTimeoutOrAbort(error: unknown): boolean {
 
 export function getDocumentErrorText(error: unknown): string {
   if (isTimeoutOrAbort(error)) {
-    return "پردازش فایل بیش از حد طول کشید. لطفاً کمی بعد دوباره تلاش کنید.";
+    return FILE_TIMEOUT_TEXT;
   }
 
   if (error instanceof OllamaError || getErrorMessage(error).includes("ECONNREFUSED")) {
-    return "سرویس هوش مصنوعی در حال حاضر در دسترس نیست. لطفاً کمی بعد دوباره تلاش کنید.";
+    return AI_UNAVAILABLE_TEXT;
   }
 
   if (error instanceof PdfExtractError) {
-    return "خواندن فایل PDF با مشکل مواجه شد. لطفاً از سالم بودن فایل مطمئن شوید و دوباره تلاش کنید.";
+    return PDF_UNREADABLE_TEXT;
   }
 
-  return "پردازش فایل با خطا مواجه شد. لطفاً کمی بعد دوباره تلاش کنید.";
+  return FILE_PROCESSING_FAILED_TEXT;
 }
 
 export function logDatabaseError(
