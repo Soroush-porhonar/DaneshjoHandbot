@@ -158,7 +158,7 @@ describe("retrieval", () => {
 
     const hits = await retrieveRelevantChunks(alice, "#1", 10, documentId);
 
-    // Chunks 0 and 2 match exactly; chunk 1 (distance 1) is over 0.55.
+    // Chunks 0 and 2 match exactly; chunk 1 (distance 1) is over the cutoff.
     expect(hits.map((hit) => hit.chunkIndex).sort()).toEqual([0, 2]);
     expect(hits.every((hit) => Number(hit.distance) < 0.01)).toBe(true);
   });

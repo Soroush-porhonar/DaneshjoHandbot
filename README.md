@@ -59,9 +59,9 @@ Built with TypeScript, Node.js, PostgreSQL, pgvector, Ollama, and Qwen 3.5 9B.
 
 | Harness                | What it measures                                                                                     | Current result (draft sets)                    |
 | ---------------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| `npm run eval`         | Retrieval on 44 questions by type (exact term, paraphrase, multi-page, follow-up, unanswerable): hit@k, MRR, context coverage, threshold calibration, diff vs previous run | hit@1 65%, hit@3 88%, MRR 0.79, answer page in context 90% |
+| `npm run eval`         | Retrieval on 71 questions over 6 documents (slides and long notes) by type (exact term, paraphrase, multi-page, follow-up, unanswerable): hit@k, MRR, context coverage, threshold calibration, diff vs previous run | hit@1 68%, hit@3 89%, MRR 0.80, answer page in context 95% |
 | `npm run eval:router`  | Router accuracy on 30 labelled messages, with a confusion matrix                                     | route 100%, route + mode 97%                   |
-| `npm run eval:answers` | Full pipeline: cites the right page, contains key facts, answers in Persian, refuses unanswerable questions; LLM-as-judge faithfulness | 20/20 pass, 4/4 unanswerable refused          |
+| `npm run eval:answers` | Full pipeline: cites the right page, contains key facts, answers in Persian, refuses unanswerable questions; LLM-as-judge faithfulness | 25/25 pass, 6/6 unanswerable refused          |
 | `npm run eval:ocr`     | OCR character error rate against an automatic answer key (pages with a good text layer)             | prose 5–7% CER                                 |
 | `npm run benchmark`    | Time per stage (router, rewrite, retrieval, generation), p50/p95                                     | 8.5 s median; generation 76%, router 23%       |
 

@@ -50,7 +50,12 @@ export const config = {
     },
     /** Slide decks: give the model the hit's whole section (no measured effect at the current context cap). */
     sectionExpansion: process.env.SECTION_EXPANSION === "true",
-    maxCosineDistance: 0.55,
+    /**
+     * Chunks farther than this are ignored. Calibrated with npm run eval:
+     * 0.6 keeps 98% of correct pages (0.55 kept 93%). Unanswerable questions
+     * overlap these distances, so the grounded prompt does the refusing.
+     */
+    maxCosineDistance: 0.6,
     /** Vector hits per question mode. */
     retrievalLimits: { focused: 3, multi_part: 5 },
     /** Hits plus their neighbouring chunks may fill at most this many chunks. */
