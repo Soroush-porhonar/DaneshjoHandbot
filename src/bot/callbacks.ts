@@ -7,7 +7,14 @@ import {
 import type { BaleUpdate } from "../bale.js";
 import { findOrCreateUser } from "../db/users.js";
 import { logger } from "../logger.js";
-import { NO_REQUEST_TO_CANCEL_TEXT, REQUEST_CANCELLED_TEXT } from "../messages.js";
+import { getSelectedDocumentId } from "../db/conversations.js";
+import { listDocuments } from "../db/documents.js";
+import {
+  DELETE_NOT_FOUND_TEXT,
+  NO_REQUEST_TO_CANCEL_TEXT,
+  REQUEST_CANCELLED_TEXT,
+  documentInfoText,
+} from "../messages.js";
 import { parseCallback } from "./buttons.js";
 import { cancelRequest } from "./cancellation.js";
 import {
@@ -70,6 +77,19 @@ export async function handleCallback(query: CallbackQuery): Promise<void> {
   const context = { chatId, userId: user.id, args: [] as string[] };
 
   switch (callback.action) {
+    case "info": {
+      // Only the user's own documents: the list is fetched for this user.
+      const document = (await listDocuments(user.id)).find((d) => d.id === callback.documentId);
+      const selected = await getSelectedDocumentId(user.id);
+      await answerCallbackQuery(
+        query.id,
+        document
+          ? documentInfoText(document.filename, document.status, document.id === selected)
+          : DELETE_NOT_FOUND_TEXT,
+      );
+      return;
+    }
+
     case "documents": {
       await answerCallbackQuery(query.id);
       await send(chatId, await documentsCommand(context));

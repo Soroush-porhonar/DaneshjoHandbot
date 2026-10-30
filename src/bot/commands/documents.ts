@@ -16,7 +16,7 @@ import {
   SELECT_USAGE_TEXT,
   deleteConfirmationText,
   deleteSucceededText,
-  documentsListText,
+  DOCUMENTS_LIST_TEXT,
   selectedText,
 } from "../../messages.js";
 import {
@@ -48,7 +48,7 @@ export const documentsCommand: CommandHandler = async ({ userId }) => {
   const selectedDocumentId = await getSelectedDocumentId(userId);
 
   return {
-    text: documentsListText(documents, selectedDocumentId),
+    text: DOCUMENTS_LIST_TEXT,
     markup: { inline: documentButtons(documents, selectedDocumentId) },
   };
 };

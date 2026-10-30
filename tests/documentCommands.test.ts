@@ -57,30 +57,46 @@ describe("/documents", () => {
     expect(await run("/documents")).toBe(messages.NO_DOCUMENTS_TEXT);
   });
 
-  it("puts select and delete buttons under the list; failed documents can only be deleted", async () => {
+  it("one row per document: [name] [select] [delete]; failed documents can't be selected", async () => {
     vi.mocked(listDocuments).mockResolvedValue([
       { id: 3, filename: "notes.pdf", status: "completed" },
       { id: 4, filename: "broken.pdf", status: "failed" },
     ]);
     vi.mocked(getSelectedDocumentId).mockResolvedValue(3);
 
-    expect(await buttonData("/documents")).toEqual([["sel:3", "del:3"], ["del:4"]]);
+    expect(await buttonData("/documents")).toEqual([
+      ["info:3", "sel:3", "del:3"],
+      ["info:4", "del:4"],
+    ]);
   });
 
-  it("marks the active document and shortens long names", async () => {
+  it("only explains the active document in text; the documents are the buttons", async () => {
+    vi.mocked(listDocuments).mockResolvedValue([{ id: 3, filename: "notes.pdf", status: "completed" }]);
+    vi.mocked(getSelectedDocumentId).mockResolvedValue(3);
+
+    const text = await run("/documents");
+
+    expect(text).toBe(messages.DOCUMENTS_LIST_TEXT);
+    expect(text).not.toContain("notes.pdf");
+  });
+
+  it("labels: ✅ marks the active document, ⚠️ a failed one; long names are shortened", async () => {
     const long = "جزوه درس آزمون نرم افزاراستاد زاغری 405.pdf";
     vi.mocked(listDocuments).mockResolvedValue([
       { id: 3, filename: "notes.pdf", status: "completed" },
       { id: 9, filename: long, status: "completed" },
+      { id: 4, filename: "broken.pdf", status: "failed" },
     ]);
     vi.mocked(getSelectedDocumentId).mockResolvedValue(3);
 
     const result = (await reply("/documents")) as CommandReply;
-    const labels = "inline" in result.markup ? result.markup.inline.map((row) => row[0]!.text) : [];
+    const rows = "inline" in result.markup ? result.markup.inline.map((row) => row.map((b) => b.text)) : [];
 
-    expect(labels[0]).toBe("✅ notes");
-    expect(labels[1]!.startsWith("📌 ")).toBe(true);
-    expect(labels[1]!.length).toBeLessThanOrEqual(31);
+    expect(rows[0]).toEqual(["✅ notes", messages.ACTIVE_BUTTON, messages.DELETE_BUTTON]);
+    expect(rows[1]![0]!.startsWith("📄 ")).toBe(true);
+    expect(rows[1]![0]!.length).toBeLessThanOrEqual(31);
+    expect(rows[1]![1]).toBe(messages.SELECT_BUTTON);
+    expect(rows[2]).toEqual(["⚠️ broken", messages.DELETE_BUTTON]);
   });
 
   it("opens from the main menu button too", async () => {

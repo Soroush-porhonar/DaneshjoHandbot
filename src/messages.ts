@@ -8,7 +8,7 @@
  * - Commands are always written with cmd(), e.g. cmd("/select 3").
  * - Buttons do the common actions; typed commands keep working.
  */
-import type { DocumentStatus, DocumentSummary } from "./db/documents.js";
+import type { DocumentStatus } from "./db/documents.js";
 
 /** Left-to-right mark (invisible). */
 const LRM = "‎";
@@ -98,43 +98,36 @@ export const DOCUMENT_STATUS_TEXT: Record<DocumentStatus, string> = {
 export const NO_DOCUMENTS_TEXT =
   "هنوز هیچ جزوه‌ای نفرستادی.\n\nبرای شروع، یک فایل PDF برام بفرست. 📄";
 
-/** Button labels under the documents list. */
-export const selectButtonText = (name: string, active: boolean): string =>
-  `${active ? "✅" : "📌"} ${name}`;
+/** Button labels under the documents list (one row per document). */
+export const SELECT_BUTTON = "📌 انتخاب";
+export const ACTIVE_BUTTON = "✅ فعال";
 export const DELETE_BUTTON = "🗑️ حذف";
 
-export function documentsListText(
-  documents: DocumentSummary[],
-  selectedDocumentId: number | null,
-): string {
-  const active = documents.find((document) => document.id === selectedDocumentId);
+/** The document's name on its button: ✅ active, ⏳ still processing, ⚠️ failed. */
+export const documentNameButton = (
+  name: string,
+  status: DocumentStatus,
+  active: boolean,
+): string => {
+  const icon = active
+    ? "✅"
+    : status === "failed"
+      ? "⚠️"
+      : status === "completed"
+        ? "📄"
+        : "⏳";
+  return `${icon} ${name}`;
+};
 
-  const activeText = active
-    ? `📌 **سند فعال**\n` +
-      `📄 ${active.filename}\n` +
-      `شناسه: ${active.id}\n` +
-      `وضعیت: ${DOCUMENT_STATUS_TEXT[active.status]}`
-    : `📌 **سند فعال**\nهنوز سندی انتخاب نشده.`;
+/** Popup when a document's name is tapped (names on buttons are shortened). */
+export const documentInfoText = (filename: string, status: DocumentStatus, active: boolean): string =>
+  `${filename}\nوضعیت: ${DOCUMENT_STATUS_TEXT[status]}${active ? " — سند فعال" : ""}`;
 
-  const list = documents
-    .map(
-      (document, index) =>
-        `${index + 1}. ${document.filename}\n` +
-        `   شناسه: ${document.id}\n` +
-        `   وضعیت: ${DOCUMENT_STATUS_TEXT[document.status]}`,
-    )
-    .join("\n\n");
-
-  return (
-    `${activeText}\n\n` +
-    `📚 **جزوه‌های تو**\n\n` +
-    `${list}\n\n` +
-    `👇 **انتخاب یا حذف**\n` +
-    `برای سند فعال کردن یک جزوه روی اسمش بزن، و برای حذفش روی «${DELETE_BUTTON}» کنارش.\n` +
-    `با تایپ هم می‌شه، مثلاً: ${cmd("/select 3")} یا ${cmd("/delete 3")}\n\n` +
-    `💡 **نکته:** هر PDF جدیدی که با موفقیت پردازش بشه، خودکار سند فعال می‌شه.`
-  );
-}
+export const DOCUMENTS_LIST_TEXT =
+  `📚 **جزوه‌های تو**\n\n` +
+  `📌 **سند فعال** جزوه‌ایه که سؤال‌هات از روی اون جواب داده می‌شه؛ کنار اسمش ✅ می‌بینی. ` +
+  `هر PDF جدیدی که بفرستی، بعد از پردازش خودکار سند فعال می‌شه.\n\n` +
+  `👇 برای فعال کردن یک جزوه «${SELECT_BUTTON}» و برای پاک کردنش «${DELETE_BUTTON}» رو بزن.`;
 
 export const SELECT_USAGE_TEXT = `شناسه جزوه رو این‌طوری وارد کن:\n${cmd("/select 1")}`;
 

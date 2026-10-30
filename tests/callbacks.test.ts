@@ -51,6 +51,7 @@ describe("parseCallback", () => {
     ["delno", { action: "cancelDelete" }],
     ["docs", { action: "documents" }],
     ["cancel", { action: "cancel" }],
+    ["info:7", { action: "info", documentId: 7 }],
     ["sel:abc", null],
     ["toString", null],
     ["", null],
@@ -78,7 +79,11 @@ describe("handleCallback", () => {
     expect(selectDocument).toHaveBeenCalledWith(3, 5);
     expect(answerCallbackQuery).toHaveBeenCalledWith("cb", messages.selectedText(5));
     expect(editMessageText).toHaveBeenCalledWith(CHAT, 7, expect.any(String), [
-      [expect.objectContaining({ text: "✅ notes", callback_data: "sel:5" }), expect.anything()],
+      [
+        expect.objectContaining({ text: "✅ notes", callback_data: "info:5" }),
+        expect.objectContaining({ text: messages.ACTIVE_BUTTON, callback_data: "sel:5" }),
+        expect.objectContaining({ callback_data: "del:5" }),
+      ],
     ]);
   });
 
@@ -144,9 +149,29 @@ describe("handleCallback", () => {
   it("📚 opens the documents list with its buttons", async () => {
     await handleCallback(press("docs"));
 
-    expect(sendMessage).toHaveBeenCalledWith(CHAT, expect.any(String), {
-      inline: [[expect.objectContaining({ callback_data: "sel:5" }), expect.objectContaining({ callback_data: "del:5" })]],
+    expect(sendMessage).toHaveBeenCalledWith(CHAT, messages.DOCUMENTS_LIST_TEXT, {
+      inline: [[
+        expect.objectContaining({ callback_data: "info:5" }),
+        expect.objectContaining({ callback_data: "sel:5" }),
+        expect.objectContaining({ callback_data: "del:5" }),
+      ]],
     });
+  });
+
+  it("tapping a name shows its full name and status", async () => {
+    await handleCallback(press("info:5"));
+
+    expect(listDocuments).toHaveBeenCalledWith(3);
+    expect(answerCallbackQuery).toHaveBeenCalledWith(
+      "cb",
+      messages.documentInfoText("notes.pdf", "completed", true),
+    );
+  });
+
+  it("tapping a name of a document the user doesn't own shows nothing about it", async () => {
+    await handleCallback(press("info:99"));
+
+    expect(answerCallbackQuery).toHaveBeenCalledWith("cb", messages.DELETE_NOT_FOUND_TEXT);
   });
 
   it("a failed message update does not fail the press", async () => {
