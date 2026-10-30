@@ -9,6 +9,7 @@ vi.mock("../src/db/updates.js", () => ({
 vi.mock("../src/bale.js", () => ({ sendMessage: vi.fn() }));
 vi.mock("../src/chat/chatService.js", () => ({ handleMessage: vi.fn() }));
 vi.mock("../src/chat/documentUpload.js", () => ({ handleDocument: vi.fn() }));
+vi.mock("../src/bot/feedback.js", () => ({ handleFeedback: vi.fn() }));
 
 const { dispatchUpdate } = await import("../src/bot/dispatcher.js");
 const { isUpdateProcessed, markUpdateProcessed } = await import("../src/db/updates.js");
@@ -85,6 +86,17 @@ describe("dispatchUpdate", () => {
 
     expect(handleDocument).toHaveBeenCalledWith(9, document);
     expect(markUpdateProcessed).toHaveBeenCalledWith(5);
+  });
+
+  it("handles a 👍/👎 press and marks it processed", async () => {
+    const { handleFeedback } = await import("../src/bot/feedback.js");
+    const query = { id: "cb", data: "fb:1:1", message: { message_id: 3, chat: { id: 7 } } };
+
+    await dispatchUpdate({ update_id: 12, callback_query: query });
+
+    expect(handleFeedback).toHaveBeenCalledWith(query);
+    expect(markUpdateProcessed).toHaveBeenCalledWith(12);
+    expect(handleMessage).not.toHaveBeenCalled();
   });
 
   it("acknowledges updates it does not handle (stickers, edits)", async () => {

@@ -14,6 +14,10 @@ import { logDatabaseError } from "../errors.js";
 import { askAI } from "../llm/generalChat.js";
 import { logger } from "../logger.js";
 import { answerFromDocuments, prefetchCandidates } from "../rag/answer.js";
+import type { AnswerTrace } from "../rag/answer.js";
+import { createAnswerLog } from "../db/answerLogs.js";
+import type { NewAnswerLog } from "../db/answerLogs.js";
+import { feedbackButtons } from "../bot/feedback.js";
 import { needsRewrite, rewriteQuestion } from "../rag/rewrite.js";
 import { routeMessage } from "../rag/router.js";
 
@@ -33,13 +37,30 @@ async function notify(chatId: number, text: string): Promise<boolean> {
   }
 }
 
+type AnswerLogInfo = Omit<NewAnswerLog, "userId" | "answer" | "latencyMs">;
+
+/** A reply, plus what to record about it when it answered a question. */
+interface Reply {
+  answer: string;
+  log?: AnswerLogInfo;
+}
+
+const chatLog = (question: string): AnswerLogInfo => ({
+  question,
+  rewrittenQuestion: null,
+  route: "chat",
+  retrievalMode: null,
+  documentId: null,
+  context: [],
+});
+
 /** Answers a plain-text message, using documents when the router says so. */
 async function answerQuestion(
   chatId: number,
   { userId, conversationId }: Session,
   text: string,
   signal?: AbortSignal,
-): Promise<string> {
+): Promise<Reply> {
   await sendMessage(chatId, THINKING_NOTICE_TEXT);
 
   const documentNames = await listCompletedFilenames(userId);
@@ -49,7 +70,7 @@ async function answerQuestion(
   );
 
   if (documentNames.length === 0) {
-    return askAI(history, signal);
+    return { answer: await askAI(history, signal), log: chatLog(text) };
   }
 
   // The current message is already saved, so it is the last history entry.
@@ -64,17 +85,47 @@ async function answerQuestion(
 
   if (classification.route === "document") {
     const question = await rewriteQuestion(text, previous, signal);
-
-    return answerFromDocuments(
+    const trace: AnswerTrace = {};
+    const answer = await answerFromDocuments(
       userId,
       question,
       classification.retrievalMode,
       signal,
       prefetch,
+      trace,
     );
+
+    return {
+      answer,
+      log: {
+        question: text,
+        rewrittenQuestion: question === text ? null : question,
+        route: "document",
+        retrievalMode: classification.retrievalMode,
+        documentId: trace.documentId ?? null,
+        context: (trace.context ?? []).map((chunk) => ({
+          page: chunk.pageNumber,
+          pageEnd: chunk.pageEnd ?? null,
+          chunkIndex: chunk.chunkIndex,
+          isHit: chunk.isHit,
+        })),
+      },
+    };
   }
 
-  return askAI(history, signal);
+  return { answer: await askAI(history, signal), log: chatLog(text) };
+}
+
+/** Records an answer for review; returns its id, or null if logging failed (never blocks the reply). */
+async function logAnswer(userId: number, reply: Reply, latencyMs: number): Promise<number | null> {
+  if (!reply.log) return null;
+
+  try {
+    return await createAnswerLog({ ...reply.log, userId, answer: reply.answer, latencyMs });
+  } catch (error: unknown) {
+    logger.warn("Failed to log answer:", error);
+    return null;
+  }
 }
 
 /**
@@ -98,17 +149,20 @@ export async function handleMessage(
     return notify(chatId, SAVE_MESSAGE_FAILED_TEXT);
   }
 
-  let answer: string;
+  let reply: Reply;
+  const started = Date.now();
 
   try {
     const command = parseCommand(text);
 
-    answer = command
-      ? await command.handler({
-          chatId,
-          userId: session.userId,
-          args: command.args,
-        })
+    reply = command
+      ? {
+          answer: await command.handler({
+            chatId,
+            userId: session.userId,
+            args: command.args,
+          }),
+        }
       : await answerQuestion(chatId, session, text, signal);
   } catch (error: unknown) {
     if (signal?.aborted) {
@@ -121,14 +175,17 @@ export async function handleMessage(
   }
 
   try {
-    await saveMessage(session.conversationId, "assistant", answer);
+    await saveMessage(session.conversationId, "assistant", reply.answer);
   } catch (error: unknown) {
     logger.error("Failed to save assistant response:", error);
     return false;
   }
 
+  // Answers to questions get 👍/👎 buttons; commands and errors do not.
+  const logId = await logAnswer(session.userId, reply, Date.now() - started);
+
   try {
-    await sendMessage(chatId, answer);
+    await sendMessage(chatId, reply.answer, logId === null ? undefined : feedbackButtons(logId));
     return true;
   } catch (error: unknown) {
     logger.error("Failed to send Bale message:", error);

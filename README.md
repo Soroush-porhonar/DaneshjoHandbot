@@ -24,6 +24,7 @@ Built with TypeScript, Node.js, PostgreSQL, pgvector, Ollama, and Qwen 3.5 9B.
 - **Follow-Up Understanding:** Short follow-ups ("explain more") are rewritten into standalone questions using the conversation.
 - **Long-Document Summarization:** Summarize document batches sized to the model's context window, then combine them.
 - **Non-Blocking & Cancellable:** Slow work runs in the background; `/cancel` stops a running request.
+- **Feedback Loop:** Every answer has 👍/👎 buttons; answers and votes are logged, and disliked answers become draft evaluation questions.
 
 ## Technical Highlights
 
@@ -64,6 +65,7 @@ Built with TypeScript, Node.js, PostgreSQL, pgvector, Ollama, and Qwen 3.5 9B.
 | `npm run eval:answers` | Full pipeline: cites the right page, contains key facts, answers in Persian, refuses unanswerable questions; LLM-as-judge faithfulness | 25/25 pass, 6/6 unanswerable refused          |
 | `npm run eval:ocr`     | OCR character error rate against an automatic answer key (pages with a good text layer)             | prose 5–7% CER                                 |
 | `npm run benchmark`    | Time per stage (router, rewrite, retrieval, generation), p50/p95                                     | 10.5 s median; generation 56%, retrieval + rerank 27%, router 16% |
+| `npm run feedback`     | Real usage: every answer is logged (question, rewrite, route, pages used, time) with 👍/👎 buttons in Bale; the report shows satisfaction and speed and turns 👎 answers into draft eval questions | — (collects from real use) |
 
 **Found by measuring:** Ollama's default 4096-token context silently truncated long prompts; default sampling (temperature 1.0) was too random for factual answers; every citation was one page off and page 1 was never indexed; the follow-up rewriter sometimes answered instead of rewriting and once replaced a name ("روسو") with a hallucinated one — fixed with a few-shot prompt (follow-ups reaching the right context: 25% → 75%); unanswerable questions have the same vector distances as answerable ones, so the similarity threshold cannot filter them — grounding in the prompt has to (and does); the vision model writes Persian words with reversed letters (~60% CER on slides) — detected and repaired, now 4–14%. OCR on text layers with split letters (12–43% of words, incl. the COVID PDF) gave no gain on 21 questions while costing ~45 s/page, so only worse pages are OCR'd (a 203-page upload: 63 min → 20 s). Hybrid search (PostgreSQL full-text + vectors, Reciprocal Rank Fusion) added no page that vector search had missed on 86 questions — BGE-M3 already handles exact terms and the cross-encoder reranker fixes the order — so it is built but off by default. Speed: Ollama unloaded the model after 5 idle minutes, costing ~10 s on the next question (now kept loaded); general chat was thinking before answering (49 s → 22 s with thinking off); search now runs while the router decides (context ready 7.7 s → 6.0 s). KV-cache quantization was skipped: Qwen 3.5 is a hybrid model whose KV cache is only 256 MB. A chunking ablation on 65 questions over 6 documents (slides and 200-page notes) showed per-page chunks beat cross-page and semantic chunking on long notes (hit@1 50% vs 21% / 36%), because their pages already hold one subtopic each — so those variants stay off by default.
 
@@ -114,6 +116,7 @@ ollama pull qwen3.5:9b && ollama pull bge-m3
 npm run dev                   # start the bot
 npm test                      # unit tests
 npm run test:integration      # database tests (creates daneshjohandbot_test)
+npm run feedback              # real-usage report: 👍/👎, answer times, 👎 answers as draft eval questions
 npm run eval                  # retrieval evaluation (also: eval:router, eval:answers, eval:ocr, benchmark)
 ```
 

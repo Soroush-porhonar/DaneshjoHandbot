@@ -18,7 +18,7 @@ import {
 } from "../llm/prompts/rag.js";
 import { batchByChars } from "./batch.js";
 import { getDocumentChunks, rankedCandidates, retrieveContext } from "./retrieve.js";
-import type { RetrievedChunk } from "./retrieve.js";
+import type { ContextChunk, RetrievedChunk } from "./retrieve.js";
 import type { RetrievalMode } from "./router.js";
 
 interface SourceChunk {
@@ -132,8 +132,11 @@ async function answerFocusedQuestion(
   mode: "focused" | "multi_part",
   signal?: AbortSignal,
   ranked?: RetrievedChunk[],
+  trace?: AnswerTrace,
 ): Promise<string> {
   const chunks = await retrieveContext(userId, question, mode, documentId, ranked);
+
+  if (trace) trace.context = chunks;
 
   if (chunks.length === 0) {
     return NO_RELEVANT_CONTENT_TEXT;
@@ -146,6 +149,13 @@ async function answerFocusedQuestion(
   );
 
   return appendSources(answer, chunks);
+}
+
+/** Filled in while answering, for the answer log. */
+export interface AnswerTrace {
+  documentId?: number | null;
+  /** The chunks the model was given (empty for whole-document summaries). */
+  context?: ContextChunk[];
 }
 
 /** Search results fetched early, while the router was still deciding. */
@@ -179,6 +189,7 @@ export async function answerFromDocuments(
   retrievalMode: RetrievalMode = "multi_part",
   signal?: AbortSignal,
   prefetch?: Promise<Prefetch>,
+  trace?: AnswerTrace,
 ): Promise<string> {
   // Use early results only if they were fetched for this exact question;
   // if fetching them failed, search again normally.
@@ -186,11 +197,13 @@ export async function answerFromDocuments(
   const usable = early?.question === question ? early : null;
   const documentId = usable ? usable.documentId : await getSelectedDocumentId(userId);
 
+  if (trace) trace.documentId = documentId;
+
   if (documentId === null) {
     return NO_DOCUMENT_SELECTED_TEXT;
   }
 
-  return answerFromDocument(userId, documentId, question, retrievalMode, signal, usable?.ranked);
+  return answerFromDocument(userId, documentId, question, retrievalMode, signal, usable?.ranked, trace);
 }
 
 /** Answers from one specific document (also used by the answer eval). */
@@ -201,6 +214,7 @@ export async function answerFromDocument(
   retrievalMode: RetrievalMode,
   signal?: AbortSignal,
   ranked?: RetrievedChunk[],
+  trace?: AnswerTrace,
 ): Promise<string> {
   if (retrievalMode === "broad") {
     return answerBroadQuestion(userId, documentId, question, signal);
@@ -213,5 +227,6 @@ export async function answerFromDocument(
     retrievalMode,
     signal,
     ranked,
+    trace,
   );
 }
