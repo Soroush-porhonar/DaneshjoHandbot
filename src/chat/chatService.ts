@@ -13,8 +13,8 @@ import { findOrCreateUser } from "../db/users.js";
 import { logDatabaseError } from "../errors.js";
 import { askAI } from "../llm/generalChat.js";
 import { logger } from "../logger.js";
-import { answerFromDocuments } from "../rag/answer.js";
-import { rewriteQuestion } from "../rag/rewrite.js";
+import { answerFromDocuments, prefetchCandidates } from "../rag/answer.js";
+import { needsRewrite, rewriteQuestion } from "../rag/rewrite.js";
 import { routeMessage } from "../rag/router.js";
 
 interface Session {
@@ -54,6 +54,12 @@ async function answerQuestion(
 
   // The current message is already saved, so it is the last history entry.
   const previous = history.slice(0, -1);
+
+  // A standalone question can be searched while the router decides (saves the
+  // search time). Follow-ups are searched only after they are rewritten.
+  const prefetch = needsRewrite(text, previous)
+    ? undefined
+    : prefetchCandidates(userId, text);
   const classification = await routeMessage(text, documentNames, previous);
 
   if (classification.route === "document") {
@@ -64,6 +70,7 @@ async function answerQuestion(
       question,
       classification.retrievalMode,
       signal,
+      prefetch,
     );
   }
 

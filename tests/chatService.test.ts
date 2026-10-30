@@ -19,8 +19,15 @@ vi.mock("../src/db/documents.js", () => ({
   deleteDocument: vi.fn(),
 }));
 vi.mock("../src/llm/generalChat.js", () => ({ askAI: vi.fn() }));
-vi.mock("../src/rag/answer.js", () => ({ answerFromDocuments: vi.fn() }));
-vi.mock("../src/rag/rewrite.js", () => ({ rewriteQuestion: vi.fn() }));
+vi.mock("../src/rag/answer.js", () => ({
+  answerFromDocuments: vi.fn(),
+  prefetchCandidates: vi.fn(),
+}));
+// Keep the real needsRewrite (which messages count as follow-ups); fake the LLM call.
+vi.mock("../src/rag/rewrite.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/rag/rewrite.js")>()),
+  rewriteQuestion: vi.fn(),
+}));
 vi.mock("../src/rag/router.js", () => ({ routeMessage: vi.fn() }));
 
 const { handleMessage } = await import("../src/chat/chatService.js");
@@ -30,8 +37,8 @@ const { findOrCreateConversation } = await import("../src/db/conversations.js");
 const { saveMessage, getRecentMessages } = await import("../src/db/messages.js");
 const { listCompletedFilenames } = await import("../src/db/documents.js");
 const { askAI } = await import("../src/llm/generalChat.js");
-const { answerFromDocuments } = await import("../src/rag/answer.js");
-const { rewriteQuestion } = await import("../src/rag/rewrite.js");
+const { answerFromDocuments, prefetchCandidates } = await import("../src/rag/answer.js");
+const { needsRewrite, rewriteQuestion } = await import("../src/rag/rewrite.js");
 const { routeMessage } = await import("../src/rag/router.js");
 const { logger } = await import("../src/logger.js");
 const messages = await import("../src/messages.js");
@@ -55,7 +62,10 @@ beforeEach(() => {
   // The current message is saved first, so it is the last history entry.
   vi.mocked(getRecentMessages).mockResolvedValue([...earlier, current]);
   vi.mocked(listCompletedFilenames).mockResolvedValue(["Algorithm.pdf"]);
-  vi.mocked(rewriteQuestion).mockImplementation(async (text) => `بازنویسی: ${text}`);
+  // Like the real one: only follow-ups are rewritten.
+  vi.mocked(rewriteQuestion).mockImplementation(async (text, previous) =>
+    needsRewrite(text, previous) ? `بازنویسی: ${text}` : text,
+  );
   vi.mocked(answerFromDocuments).mockResolvedValue("جواب از جزوه");
   vi.mocked(askAI).mockResolvedValue("جواب عمومی");
 });
@@ -75,9 +85,35 @@ describe("handleMessage", () => {
       `بازنویسی: ${current.content}`,
       "focused",
       undefined,
+      undefined, // a follow-up is not searched before it is rewritten
     );
+    expect(prefetchCandidates).not.toHaveBeenCalled();
     expect(saveMessage).toHaveBeenLastCalledWith(11, "assistant", "جواب از جزوه");
     expect(lastReply()).toBe("جواب از جزوه");
+  });
+
+  it("starts searching a standalone question while the router decides", async () => {
+    const question = "الگوریتم پریم چطور درخت پوشای کمینه را پیدا می‌کند و مرتبه اجرایی آن چیست؟";
+    const early = Promise.resolve({ question, documentId: 5, ranked: [] });
+    vi.mocked(prefetchCandidates).mockReturnValue(early);
+    vi.mocked(routeMessage).mockResolvedValue({ route: "document", retrievalMode: "focused" });
+
+    await handleMessage(CHAT_ID, question);
+
+    expect(prefetchCandidates).toHaveBeenCalledWith(USER_ID, question);
+    expect(answerFromDocuments).toHaveBeenCalledWith(USER_ID, question, "focused", undefined, early);
+  });
+
+  it("ignores the early search when the message is chat", async () => {
+    vi.mocked(prefetchCandidates).mockReturnValue(
+      Promise.resolve({ question: "x", documentId: 5, ranked: [] }),
+    );
+    vi.mocked(routeMessage).mockResolvedValue({ route: "chat", retrievalMode: "focused" });
+
+    await handleMessage(CHAT_ID, "سلام، امروز حال و هوای درس خوندن ندارم، چیکار کنم که انگیزه بگیرم؟");
+
+    expect(answerFromDocuments).not.toHaveBeenCalled();
+    expect(lastReply()).toBe("جواب عمومی");
   });
 
   it("gives the router the earlier messages without repeating the current one", async () => {

@@ -81,6 +81,7 @@ export async function chat(request: ChatRequest): Promise<string> {
     {
       model: config.llm.model,
       stream: false,
+      keep_alive: config.llm.keepAlive,
       messages: request.messages,
       ...(request.think !== undefined ? { think: request.think } : {}),
       ...(request.format ? { format: request.format } : {}),
@@ -118,7 +119,7 @@ export async function chat(request: ChatRequest): Promise<string> {
 export async function embed(input: string[]): Promise<number[][]> {
   const data = await post<OllamaEmbedResponse>(
     config.embedding.url,
-    { model: config.embedding.model, input },
+    { model: config.embedding.model, input, keep_alive: config.llm.keepAlive },
     AbortSignal.timeout(config.embedding.timeoutMs),
     "embedding",
   );

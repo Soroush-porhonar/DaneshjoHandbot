@@ -44,6 +44,14 @@ describe("chat", () => {
     expect(sentBody().stream).toBe(false);
   });
 
+  it("asks Ollama to keep the model loaded (avoids a ~10 s reload after pauses)", async () => {
+    reply({ message: { content: "ok" } });
+
+    await chat({ messages });
+
+    expect(sentBody().keep_alive).toBe("30m");
+  });
+
   it("lets a caller override the context size", async () => {
     reply({ message: { content: "ok" } });
 
