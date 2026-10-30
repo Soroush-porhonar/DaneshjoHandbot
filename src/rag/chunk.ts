@@ -56,8 +56,8 @@ function splitPage(page: string, chunkSize: number, overlap: number): string[] {
 /** Normalizes each page and splits it into overlapping chunks tagged with their page. */
 export function chunkPages(
   pages: PageText[],
-  chunkSize = config.rag.chunkSize,
-  overlap = config.rag.chunkOverlap,
+  chunkSize: number = config.rag.chunkSize,
+  overlap: number = config.rag.chunkOverlap,
 ): TextChunk[] {
   if (chunkSize <= 0 || overlap < 0 || overlap >= chunkSize) {
     throw new Error("Invalid chunkSize or overlap");

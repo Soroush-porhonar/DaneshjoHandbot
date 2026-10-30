@@ -77,6 +77,8 @@ export async function retrieveRelevantChunks(
   question: string,
   limit = 4,
   documentId?: number,
+  /** Chunks farther than this are dropped; the eval passes a looser value. */
+  maxDistance: number = config.rag.maxCosineDistance,
 ): Promise<RetrievedChunk[]> {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 20) {
     throw new Error("Retrieval limit must be an integer between 1 and 20.");
@@ -121,7 +123,7 @@ export async function retrieveRelevantChunks(
        AND distance <= $5
      ORDER BY distance ASC
      LIMIT $3`,
-    [userId, vector, limit, documentId ?? null, config.rag.maxCosineDistance],
+    [userId, vector, limit, documentId ?? null, maxDistance],
   );
   logger.debug(
     "[RAG] Retrieved chunks:",

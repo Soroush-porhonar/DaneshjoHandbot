@@ -1,0 +1,103 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ContextChunk, DocumentChunk } from "../src/rag/retrieve.js";
+
+vi.mock("../src/db/conversations.js", () => ({ getSelectedDocumentId: vi.fn() }));
+vi.mock("../src/rag/retrieve.js", () => ({
+  retrieveContext: vi.fn(),
+  getDocumentChunks: vi.fn(),
+}));
+vi.mock("../src/llm/ollamaClient.js", () => ({ chat: vi.fn() }));
+
+const { answerFromDocuments } = await import("../src/rag/answer.js");
+const { getSelectedDocumentId } = await import("../src/db/conversations.js");
+const { getDocumentChunks, retrieveContext } = await import("../src/rag/retrieve.js");
+const { chat } = await import("../src/llm/ollamaClient.js");
+const messages = await import("../src/messages.js");
+
+const chunk = (chunkIndex: number, pageNumber: number, isHit = true): ContextChunk => ({
+  documentId: 1,
+  filename: "notes.pdf",
+  pageNumber,
+  chunkIndex,
+  content: `متن صفحه ${pageNumber}`,
+  isHit,
+});
+
+/** The user prompt of the n-th model call. */
+const prompt = (call: number) => vi.mocked(chat).mock.calls[call]![0].messages[1]!.content;
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(getSelectedDocumentId).mockResolvedValue(1);
+  vi.mocked(chat).mockResolvedValue("پاسخ مدل");
+});
+
+describe("answerFromDocuments", () => {
+  it("asks the user to pick a document first", async () => {
+    vi.mocked(getSelectedDocumentId).mockResolvedValue(null);
+
+    expect(await answerFromDocuments(8, "سؤال")).toBe(messages.NO_DOCUMENT_SELECTED_TEXT);
+    expect(chat).not.toHaveBeenCalled();
+  });
+
+  it("does not call the model when nothing relevant was found", async () => {
+    vi.mocked(retrieveContext).mockResolvedValue([]);
+
+    expect(await answerFromDocuments(8, "سؤال", "focused")).toBe(
+      messages.NO_RELEVANT_CONTENT_TEXT,
+    );
+    expect(chat).not.toHaveBeenCalled();
+  });
+
+  it("answers from the retrieved chunks and cites only the real hits", async () => {
+    vi.mocked(retrieveContext).mockResolvedValue([chunk(0, 3, false), chunk(1, 4), chunk(2, 5, false)]);
+
+    const answer = await answerFromDocuments(8, "سؤال من", "focused");
+
+    expect(prompt(0)).toContain("سؤال من");
+    expect(prompt(0)).toContain("متن صفحه 3"); // neighbours are context...
+    expect(answer).toContain(messages.sourceLineText("notes.pdf", 4));
+    expect(answer).not.toContain(messages.sourceLineText("notes.pdf", 3)); // ...but not sources
+    expect(retrieveContext).toHaveBeenCalledWith(8, "سؤال من", "focused", 1);
+  });
+
+  it("uses low temperature for factual answers", async () => {
+    vi.mocked(retrieveContext).mockResolvedValue([chunk(0, 1)]);
+
+    await answerFromDocuments(8, "سؤال", "multi_part");
+
+    expect(vi.mocked(chat).mock.calls[0]![0].options?.temperature).toBe(0.2);
+  });
+
+  it("summarises big documents in batches, then combines them (map-reduce)", async () => {
+    const long = "ا".repeat(4000);
+    const chunks: DocumentChunk[] = [1, 2, 3, 4, 5].map((page) => ({
+      documentId: 1,
+      filename: "notes.pdf",
+      pageNumber: page,
+      chunkIndex: page - 1,
+      content: long,
+    }));
+    vi.mocked(getDocumentChunks).mockResolvedValue(chunks);
+    vi.mocked(chat).mockImplementation(async (request) =>
+      request.messages[1]!.content.includes("خلاصه") ? "پاسخ نهایی" : "خلاصه یک بخش",
+    );
+
+    const answer = await answerFromDocuments(8, "فصل را خلاصه کن", "broad");
+
+    // 5 × 4000 chars with a 9000-char budget -> 3 batches + 1 final call.
+    expect(chat).toHaveBeenCalledTimes(4);
+    expect(prompt(3)).toContain("خلاصه بخش 3");
+    expect(answer.startsWith("پاسخ نهایی")).toBe(true);
+    expect(answer).toContain(messages.sourceLineText("notes.pdf", 5));
+  });
+
+  it("passes the cancel signal to the model", async () => {
+    vi.mocked(retrieveContext).mockResolvedValue([chunk(0, 1)]);
+    const controller = new AbortController();
+
+    await answerFromDocuments(8, "سؤال", "focused", controller.signal);
+
+    expect(vi.mocked(chat).mock.calls[0]![0].signal).toBe(controller.signal);
+  });
+});

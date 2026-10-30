@@ -1,6 +1,9 @@
 import type { MigrationBuilder } from "node-pg-migrate";
 
 export async function up(pgm: MigrationBuilder): Promise<void> {
+  // pgvector provides the vector type and the <=> distance operator.
+  pgm.createExtension("vector", { ifNotExists: true });
+
   pgm.createTable("documents", {
     id: "id",
     user_id: {
