@@ -57,16 +57,19 @@ describe("/documents", () => {
     expect(await run("/documents")).toBe(messages.NO_DOCUMENTS_TEXT);
   });
 
-  it("one row per document: [name] [select] [delete]; failed documents can't be selected", async () => {
+  it("two rows per document: the name alone (full width), then [select] [delete]", async () => {
     vi.mocked(listDocuments).mockResolvedValue([
       { id: 3, filename: "notes.pdf", status: "completed" },
       { id: 4, filename: "broken.pdf", status: "failed" },
     ]);
     vi.mocked(getSelectedDocumentId).mockResolvedValue(3);
 
+    // A failed document can only be deleted.
     expect(await buttonData("/documents")).toEqual([
-      ["info:3", "sel:3", "del:3"],
-      ["info:4", "del:4"],
+      ["info:3"],
+      ["sel:3", "del:3"],
+      ["info:4"],
+      ["del:4"],
     ]);
   });
 
@@ -92,11 +95,13 @@ describe("/documents", () => {
     const result = (await reply("/documents")) as CommandReply;
     const rows = "inline" in result.markup ? result.markup.inline.map((row) => row.map((b) => b.text)) : [];
 
-    expect(rows[0]).toEqual(["✅ notes", messages.ACTIVE_BUTTON, messages.DELETE_BUTTON]);
-    expect(rows[1]![0]!.startsWith("📄 ")).toBe(true);
-    expect(rows[1]![0]!.length).toBeLessThanOrEqual(31);
-    expect(rows[1]![1]).toBe(messages.SELECT_BUTTON);
-    expect(rows[2]).toEqual(["⚠️ broken", messages.DELETE_BUTTON]);
+    expect(rows[0]).toEqual(["✅ notes"]);
+    expect(rows[1]).toEqual([messages.ACTIVE_BUTTON, messages.DELETE_BUTTON]);
+    expect(rows[2]![0]!.startsWith("📄 ")).toBe(true);
+    expect(rows[2]![0]!.length).toBeLessThanOrEqual(43);
+    expect(rows[3]).toEqual([messages.SELECT_BUTTON, messages.DELETE_BUTTON]);
+    expect(rows[4]).toEqual(["⚠️ broken"]);
+    expect(rows[5]).toEqual([messages.DELETE_BUTTON]);
   });
 
   it("opens from the main menu button too", async () => {

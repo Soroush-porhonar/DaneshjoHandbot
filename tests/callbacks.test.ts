@@ -79,8 +79,8 @@ describe("handleCallback", () => {
     expect(selectDocument).toHaveBeenCalledWith(3, 5);
     expect(answerCallbackQuery).toHaveBeenCalledWith("cb", messages.selectedText(5));
     expect(editMessageText).toHaveBeenCalledWith(CHAT, 7, expect.any(String), [
+      [expect.objectContaining({ text: "✅ notes", callback_data: "info:5" })],
       [
-        expect.objectContaining({ text: "✅ notes", callback_data: "info:5" }),
         expect.objectContaining({ text: messages.ACTIVE_BUTTON, callback_data: "sel:5" }),
         expect.objectContaining({ callback_data: "del:5" }),
       ],
@@ -150,11 +150,13 @@ describe("handleCallback", () => {
     await handleCallback(press("docs"));
 
     expect(sendMessage).toHaveBeenCalledWith(CHAT, messages.DOCUMENTS_LIST_TEXT, {
-      inline: [[
-        expect.objectContaining({ callback_data: "info:5" }),
-        expect.objectContaining({ callback_data: "sel:5" }),
-        expect.objectContaining({ callback_data: "del:5" }),
-      ]],
+      inline: [
+        [expect.objectContaining({ callback_data: "info:5" })],
+        [
+          expect.objectContaining({ callback_data: "sel:5" }),
+          expect.objectContaining({ callback_data: "del:5" }),
+        ],
+      ],
     });
   });
 

@@ -25,8 +25,8 @@ export type Callback =
   | { action: "info" | "select" | "delete"; documentId: number }
   | { action: "confirmDelete" | "cancelDelete" | "documents" | "cancel" };
 
-/** Longest document name shown on a button. */
-const MAX_NAME_LENGTH = 28;
+/** Longest document name shown on its (full-width) button. */
+const MAX_NAME_LENGTH = 40;
 
 function shortName(filename: string): string {
   const name = filename.replace(/\.pdf$/i, "");
@@ -34,26 +34,31 @@ function shortName(filename: string): string {
 }
 
 /**
- * One row per document: [name] [📌 انتخاب] [🗑️ حذف]. Tapping the name shows its
- * full name and status; only ready documents can be selected; the active one
- * reads «✅ فعال».
+ * Two rows per document: the name alone (buttons in a row share the width
+ * equally, so it gets the full width), then [📌 انتخاب] [🗑️ حذف]. Tapping the
+ * name shows its full name and status; only ready documents can be selected;
+ * the active one reads «✅ فعال».
  */
 export function documentButtons(
   documents: DocumentSummary[],
   selectedDocumentId: number | null,
 ): InlineButton[][] {
-  return documents.map((document) => {
+  return documents.flatMap((document) => {
     const active = document.id === selectedDocumentId;
 
     return [
-      {
-        text: documentNameButton(shortName(document.filename), document.status, active),
-        callback_data: `info:${document.id}`,
-      },
-      ...(document.status === "completed"
-        ? [{ text: active ? ACTIVE_BUTTON : SELECT_BUTTON, callback_data: `sel:${document.id}` }]
-        : []),
-      { text: DELETE_BUTTON, callback_data: `del:${document.id}` },
+      [
+        {
+          text: documentNameButton(shortName(document.filename), document.status, active),
+          callback_data: `info:${document.id}`,
+        },
+      ],
+      [
+        ...(document.status === "completed"
+          ? [{ text: active ? ACTIVE_BUTTON : SELECT_BUTTON, callback_data: `sel:${document.id}` }]
+          : []),
+        { text: DELETE_BUTTON, callback_data: `del:${document.id}` },
+      ],
     ];
   });
 }

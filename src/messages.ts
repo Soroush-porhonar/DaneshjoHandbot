@@ -25,7 +25,10 @@ export const MENU_DOCUMENTS = "📚 جزوه‌های من";
 export const MENU_HELP = "❓ راهنما";
 export const MENU_ABOUT = "ℹ️ درباره";
 
-export const MAIN_MENU: string[][] = [[MENU_DOCUMENTS], [MENU_HELP, MENU_ABOUT]];
+export const MAIN_MENU: string[][] = [
+  [MENU_DOCUMENTS],
+  [MENU_HELP, MENU_ABOUT],
+];
 
 // --- Info commands -----------------------------------------------------------
 
@@ -60,14 +63,6 @@ export const HELP_TEXT = `📚 **راهنمای دانشجویار**
 🌐 **۴. سؤال‌های عمومی**
 اگه سؤالت به جزوه‌هات ربطی نداشته باشه، مثل یک دستیار هوشمند معمولی جوابت رو می‌دم.
 
-**دستورها (اگه بخوای تایپ کنی):**
-${cmd("/start")} — شروع
-${cmd("/help")} — نمایش این راهنما
-${cmd("/about")} — درباره دانشجویار
-${cmd("/documents")} — دیدن و مدیریت جزوه‌ها
-${cmd("/select 1")} — انتخاب سند فعال
-${cmd("/delete 1")} — حذف یک جزوه
-${cmd("/cancel")} — لغو درخواست در حال انجام
 
 💡 **نکته:** هر PDF جدیدی که با موفقیت پردازش بشه، خودکار سند فعال می‌شه.`;
 
@@ -120,7 +115,11 @@ export const documentNameButton = (
 };
 
 /** Popup when a document's name is tapped (names on buttons are shortened). */
-export const documentInfoText = (filename: string, status: DocumentStatus, active: boolean): string =>
+export const documentInfoText = (
+  filename: string,
+  status: DocumentStatus,
+  active: boolean,
+): string =>
   `${filename}\nوضعیت: ${DOCUMENT_STATUS_TEXT[status]}${active ? " — سند فعال" : ""}`;
 
 export const DOCUMENTS_LIST_TEXT =
@@ -131,8 +130,7 @@ export const DOCUMENTS_LIST_TEXT =
 
 export const SELECT_USAGE_TEXT = `شناسه جزوه رو این‌طوری وارد کن:\n${cmd("/select 1")}`;
 
-export const SELECT_FAILED_TEXT =
-  `این جزوه پیدا نشد، هنوز پردازشش تموم نشده یا مال تو نیست. فهرست جزوه‌ها: ${cmd("/documents")}`;
+export const SELECT_FAILED_TEXT = `این جزوه پیدا نشد، هنوز پردازشش تموم نشده یا مال تو نیست. فهرست جزوه‌ها: ${cmd("/documents")}`;
 
 export const selectedText = (documentId: number): string =>
   `✅ جزوه شماره ${documentId} به‌عنوان سند فعال انتخاب شد. حالا می‌تونی سؤالت رو بپرسی.`;
@@ -144,8 +142,7 @@ export const DELETE_CANCEL_BUTTON = "❌ انصراف";
 
 export const DELETE_USAGE_TEXT = `شناسه جزوه رو این‌طوری وارد کن:\n${cmd("/delete 1")}`;
 
-export const DELETE_NOT_FOUND_TEXT =
-  `این جزوه پیدا نشد یا مال تو نیست. فهرست جزوه‌ها: ${cmd("/documents")}`;
+export const DELETE_NOT_FOUND_TEXT = `این جزوه پیدا نشد یا مال تو نیست. فهرست جزوه‌ها: ${cmd("/documents")}`;
 
 export const deleteConfirmationText = (
   filename: string,
@@ -157,8 +154,7 @@ export const deleteConfirmationText = (
   `مطمئنی می‌خوای این جزوه رو حذف کنی؟ روی یکی از دکمه‌های زیر بزن.\n\n` +
   `⚠️ با حذف جزوه، محتوای ذخیره‌شده‌ش هم برای همیشه پاک می‌شه. این درخواست فقط یک دقیقه معتبره.`;
 
-export const NO_PENDING_DELETE_TEXT =
-  `درخواست حذفی در انتظار نیست (شاید بیشتر از یک دقیقه گذشته). دوباره از فهرست جزوه‌ها حذفش کن: ${cmd("/documents")}`;
+export const NO_PENDING_DELETE_TEXT = `درخواست حذفی در انتظار نیست (شاید بیشتر از یک دقیقه گذشته). دوباره از فهرست جزوه‌ها حذفش کن: ${cmd("/documents")}`;
 
 export const deleteSucceededText = (documentId: number): string =>
   `✅ جزوه شماره ${documentId} حذف شد.`;
