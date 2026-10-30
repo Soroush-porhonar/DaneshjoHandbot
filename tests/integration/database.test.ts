@@ -31,6 +31,7 @@ const { deleteDocument, findDocumentFilename, listCompletedFilenames } = await i
   "../../src/db/documents.js"
 );
 const { isUpdateProcessed, markUpdateProcessed } = await import("../../src/db/updates.js");
+const { createAnswerLog, setFeedback } = await import("../../src/db/answerLogs.js");
 const { getDocumentChunks, retrieveContext, retrieveRelevantChunks, searchCandidates } = await import(
   "../../src/rag/retrieve.js"
 );
@@ -286,6 +287,41 @@ describe("ingestPdf", () => {
     expect(documents.rows).toEqual([{ status: "failed" }]);
     const chunks = await pool.query("SELECT 1 FROM document_chunks");
     expect(chunks.rowCount).toBe(0);
+  });
+});
+
+describe("answer logs and feedback", () => {
+  const log = (userId: number) => ({
+    userId,
+    question: "پریم چیه؟",
+    rewrittenQuestion: null,
+    route: "document" as const,
+    retrievalMode: "focused",
+    documentId: null,
+    context: [{ page: 14, chunkIndex: 13, isHit: true }],
+    answer: "جواب",
+    latencyMs: 9000,
+  });
+
+  it("stores an answer and the user's vote on it", async () => {
+    const alice = await addUser("alice");
+    const id = await createAnswerLog(log(alice));
+
+    expect(await setFeedback(id, alice, -1)).toBe(true);
+
+    const row = await pool.query("SELECT feedback, context FROM answer_logs WHERE id = $1", [id]);
+    expect(row.rows[0]).toEqual({ feedback: -1, context: [{ page: 14, chunkIndex: 13, isHit: true }] });
+  });
+
+  it("nobody can vote on someone else's answer", async () => {
+    const alice = await addUser("alice");
+    const bob = await addUser("bob");
+    const id = await createAnswerLog(log(alice));
+
+    expect(await setFeedback(id, bob, 1)).toBe(false);
+
+    const row = await pool.query("SELECT feedback FROM answer_logs WHERE id = $1", [id]);
+    expect(row.rows[0].feedback).toBeNull();
   });
 });
 

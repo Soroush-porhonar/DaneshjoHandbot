@@ -17,7 +17,8 @@ import {
   buildFocusedUserPrompt,
 } from "../llm/prompts/rag.js";
 import { batchByChars } from "./batch.js";
-import { getDocumentChunks, retrieveContext } from "./retrieve.js";
+import { getDocumentChunks, rankedCandidates, retrieveContext } from "./retrieve.js";
+import type { ContextChunk, RetrievedChunk } from "./retrieve.js";
 import type { RetrievalMode } from "./router.js";
 
 interface SourceChunk {
@@ -130,8 +131,12 @@ async function answerFocusedQuestion(
   question: string,
   mode: "focused" | "multi_part",
   signal?: AbortSignal,
+  ranked?: RetrievedChunk[],
+  trace?: AnswerTrace,
 ): Promise<string> {
-  const chunks = await retrieveContext(userId, question, mode, documentId);
+  const chunks = await retrieveContext(userId, question, mode, documentId, ranked);
+
+  if (trace) trace.context = chunks;
 
   if (chunks.length === 0) {
     return NO_RELEVANT_CONTENT_TEXT;
@@ -146,20 +151,59 @@ async function answerFocusedQuestion(
   return appendSources(answer, chunks);
 }
 
+/** Filled in while answering, for the answer log. */
+export interface AnswerTrace {
+  documentId?: number | null;
+  /** The chunks the model was given (empty for whole-document summaries). */
+  context?: ContextChunk[];
+}
+
+/** Search results fetched early, while the router was still deciding. */
+export interface Prefetch {
+  question: string;
+  documentId: number | null;
+  ranked: RetrievedChunk[];
+}
+
+/**
+ * Starts searching the selected document right away, in parallel with the
+ * router (search and reranking run on the CPU, the router on the GPU).
+ * The result is simply ignored if the message turns out to be chat.
+ */
+export function prefetchCandidates(userId: number, question: string): Promise<Prefetch> {
+  const prefetch = (async () => {
+    const documentId = await getSelectedDocumentId(userId);
+    const ranked = documentId === null ? [] : await rankedCandidates(userId, question, documentId);
+    return { question, documentId, ranked };
+  })();
+
+  // Not every prefetch is awaited (chat messages); avoid unhandled rejections.
+  prefetch.catch(() => {});
+  return prefetch;
+}
+
 /** Answers from the user's selected document. */
 export async function answerFromDocuments(
   userId: number,
   question: string,
   retrievalMode: RetrievalMode = "multi_part",
   signal?: AbortSignal,
+  prefetch?: Promise<Prefetch>,
+  trace?: AnswerTrace,
 ): Promise<string> {
-  const documentId = await getSelectedDocumentId(userId);
+  // Use early results only if they were fetched for this exact question;
+  // if fetching them failed, search again normally.
+  const early = await prefetch?.catch(() => null);
+  const usable = early?.question === question ? early : null;
+  const documentId = usable ? usable.documentId : await getSelectedDocumentId(userId);
+
+  if (trace) trace.documentId = documentId;
 
   if (documentId === null) {
     return NO_DOCUMENT_SELECTED_TEXT;
   }
 
-  return answerFromDocument(userId, documentId, question, retrievalMode, signal);
+  return answerFromDocument(userId, documentId, question, retrievalMode, signal, usable?.ranked, trace);
 }
 
 /** Answers from one specific document (also used by the answer eval). */
@@ -169,6 +213,8 @@ export async function answerFromDocument(
   question: string,
   retrievalMode: RetrievalMode,
   signal?: AbortSignal,
+  ranked?: RetrievedChunk[],
+  trace?: AnswerTrace,
 ): Promise<string> {
   if (retrievalMode === "broad") {
     return answerBroadQuestion(userId, documentId, question, signal);
@@ -180,5 +226,7 @@ export async function answerFromDocument(
     question,
     retrievalMode,
     signal,
+    ranked,
+    trace,
   );
 }

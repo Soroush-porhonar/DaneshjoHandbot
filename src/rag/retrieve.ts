@@ -348,22 +348,33 @@ export function mergeContext(
  * the most similar chunks plus the chunks right before and after them, and
  * for slide decks the other slides of the same section.
  */
+/**
+ * Search candidates ordered best first (reranked when the reranker is on).
+ * Independent of the retrieval mode, so it can start before the router decides.
+ */
+export async function rankedCandidates(
+  userId: number,
+  question: string,
+  documentId: number,
+): Promise<RetrievedChunk[]> {
+  // With a reranker: fetch more candidates and let it pick the best.
+  const limit = config.reranker.enabled
+    ? Math.max(config.rag.retrievalLimits.multi_part, config.reranker.candidates)
+    : config.rag.retrievalLimits.multi_part;
+  const candidates = await searchCandidates(userId, question, limit, documentId);
+  return rerankChunks(question, candidates);
+}
+
 export async function retrieveContext(
   userId: number,
   question: string,
   mode: ContextMode,
   documentId: number,
+  /** Candidates already ranked for this question and document (fetched early). */
+  ranked?: RetrievedChunk[],
 ): Promise<ContextChunk[]> {
-  const limit = config.rag.retrievalLimits[mode];
-  // With a reranker: fetch more candidates, let it pick the best `limit`.
-  const candidates = await searchCandidates(
-    userId,
-    question,
-    config.reranker.enabled ? Math.max(limit, config.reranker.candidates) : limit,
-    documentId,
-  );
-  const hits = (await rerankChunks(question, candidates))
-    .slice(0, limit)
+  const hits = (ranked ?? (await rankedCandidates(userId, question, documentId)))
+    .slice(0, config.rag.retrievalLimits[mode])
     .map((hit) => ({ ...hit, isHit: true }));
 
   if (hits.length === 0) return [];

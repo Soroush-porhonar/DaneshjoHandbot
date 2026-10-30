@@ -223,6 +223,18 @@ export const sourceLineText = (
     ? `${filename} — صفحه ${pageNumber} تا ${pageEnd}`
     : `${filename} — صفحه ${pageNumber}`;
 
+// --- Feedback on answers ---------------------------------------------------------
+
+export const FEEDBACK_GOOD_BUTTON = "👍 مفید بود";
+export const FEEDBACK_BAD_BUTTON = "👎 مفید نبود";
+
+export const FEEDBACK_THANKS_TEXT = "ممنون از بازخوردت! 🙏";
+
+export const FEEDBACK_SORRY_TEXT =
+  "ممنون که گفتی. این جواب رو بررسی می‌کنیم تا دفعه بعد بهتر جواب بدم.";
+
+export const FEEDBACK_FAILED_TEXT = "این بازخورد ثبت نشد.";
+
 // --- Errors ------------------------------------------------------------------
 
 export const SAVE_MESSAGE_FAILED_TEXT =

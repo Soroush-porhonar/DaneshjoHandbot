@@ -52,6 +52,21 @@ export interface BaleUpdate {
     text?: string;
     document?: BaleDocument;
   };
+  /** A press on an inline keyboard button. */
+  callback_query?: {
+    id: string;
+    data?: string;
+    message?: {
+      message_id: number;
+      chat: { id: number };
+    };
+  };
+}
+
+export interface InlineButton {
+  text: string;
+  /** 1–64 bytes, sent back in the callback query. */
+  callback_data: string;
 }
 
 interface BaleFile {
@@ -98,7 +113,15 @@ async function callBale<T>(
   return data.result;
 }
 
-export async function sendMessage(chatId: number, text: string): Promise<void> {
+/**
+ * Sends a message, split into parts if it is too long. Buttons, if any, are
+ * attached to the last part.
+ */
+export async function sendMessage(
+  chatId: number,
+  text: string,
+  buttons?: InlineButton[][],
+): Promise<void> {
   const parts = splitMessage(text);
 
   for (const [index, part] of parts.entries()) {
@@ -106,11 +129,31 @@ export async function sendMessage(chatId: number, text: string): Promise<void> {
       `[Bale] Sending part ${index + 1}/${parts.length}, length: ${part.length}`,
     );
 
+    const isLast = index === parts.length - 1;
+
     await callBale("sendMessage", {
       chat_id: chatId,
       text: part,
+      ...(isLast && buttons ? { reply_markup: { inline_keyboard: buttons } } : {}),
     });
   }
+}
+
+/** Acknowledges a button press; Bale keeps the button "loading" until this is called. */
+export async function answerCallbackQuery(callbackQueryId: string, text?: string): Promise<void> {
+  await callBale("answerCallbackQuery", {
+    callback_query_id: callbackQueryId,
+    ...(text ? { text } : {}),
+  });
+}
+
+/** Removes the inline buttons from a sent message. */
+export async function removeButtons(chatId: number, messageId: number): Promise<void> {
+  await callBale("editMessageReplyMarkup", {
+    chat_id: chatId,
+    message_id: messageId,
+    reply_markup: { inline_keyboard: [] },
+  });
 }
 
 export async function getUpdates(offset?: number): Promise<BaleUpdate[]> {

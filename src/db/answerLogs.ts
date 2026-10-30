@@ -1,0 +1,65 @@
+import { pool } from "./pool.js";
+
+export type Feedback = 1 | -1;
+
+/** A chunk the model saw, as stored in the log. */
+export interface LoggedChunk {
+  page: number | null;
+  pageEnd?: number | null;
+  chunkIndex: number;
+  isHit: boolean;
+}
+
+export interface NewAnswerLog {
+  userId: number;
+  question: string;
+  rewrittenQuestion: string | null;
+  route: "document" | "chat";
+  retrievalMode: string | null;
+  documentId: number | null;
+  context: LoggedChunk[];
+  answer: string;
+  latencyMs: number;
+}
+
+export async function createAnswerLog(log: NewAnswerLog): Promise<number> {
+  const result = await pool.query<{ id: number }>(
+    `INSERT INTO answer_logs
+       (user_id, question, rewritten_question, route, retrieval_mode, document_id,
+        context, answer, latency_ms)
+     VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9)
+     RETURNING id`,
+    [
+      log.userId,
+      log.question,
+      log.rewrittenQuestion,
+      log.route,
+      log.retrievalMode,
+      log.documentId,
+      JSON.stringify(log.context),
+      log.answer,
+      log.latencyMs,
+    ],
+  );
+
+  return result.rows[0]!.id;
+}
+
+/**
+ * Stores a 👍/👎 for an answer. Only the user who received the answer can rate
+ * it; returns false for anyone else or an unknown answer.
+ */
+export async function setFeedback(
+  logId: number,
+  userId: number,
+  feedback: Feedback,
+): Promise<boolean> {
+  const result = await pool.query(
+    `UPDATE answer_logs
+     SET feedback = $3, feedback_at = NOW()
+     WHERE id = $1 AND user_id = $2`,
+    [logId, userId, feedback],
+  );
+
+  return result.rowCount === 1;
+}

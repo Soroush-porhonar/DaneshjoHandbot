@@ -18,7 +18,8 @@
     "test:coverage": "vitest run --coverage",
     "eval:answers": "tsx scripts/eval-answers.ts",
     "eval:ocr": "tsx scripts/eval-ocr.ts",
-    "benchmark": "tsx scripts/benchmark.ts"
+    "benchmark": "tsx scripts/benchmark.ts",
+    "feedback": "tsx scripts/feedback-report.ts"
   },
   "keywords": [],
   "author": "",

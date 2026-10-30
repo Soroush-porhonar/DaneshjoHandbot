@@ -9,6 +9,8 @@ export async function askAI(
   signal?: AbortSignal,
 ): Promise<string> {
   return chat({
+    // Thinking first made chat answers 2.2x slower (49 s vs 22 s, measured) with similar answers.
+    think: false,
     messages: [{ role: "system", content: CHAT_SYSTEM_PROMPT }, ...history],
     options: { temperature: config.llm.temperature.chat },
     signal,

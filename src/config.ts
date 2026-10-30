@@ -10,6 +10,11 @@ function required(key: string): string {
   return value;
 }
 
+/** Ollama accepts a duration ("30m") or a number of seconds (-1 = forever). */
+function parseKeepAlive(value: string): string | number {
+  return /^-?\d+$/.test(value) ? Number(value) : value;
+}
+
 export const config = {
   port: Number(required("PORT")),
   baleToken: required("BALE_TOKEN"),
@@ -22,6 +27,12 @@ export const config = {
     routerTimeoutMs: 60_000,
     /** Ollama defaults to 4096 tokens, which silently truncates long prompts. */
     numCtx: 8192,
+    /**
+     * How long Ollama keeps a model in GPU memory after a request. Ollama's
+     * default (5 min) made the next question after a pause wait ~10 s for the
+     * model to load (measured). "-1" keeps it loaded; the GPU memory stays reserved.
+     */
+    keepAlive: parseKeepAlive(process.env.LLM_KEEP_ALIVE ?? "30m"),
     temperature: { rag: 0.2, router: 0, chat: 0.7 },
   },
 

@@ -18,9 +18,17 @@ vi.mock("../src/db/documents.js", () => ({
   findDocumentFilename: vi.fn(),
   deleteDocument: vi.fn(),
 }));
+vi.mock("../src/db/answerLogs.js", () => ({ createAnswerLog: vi.fn() }));
 vi.mock("../src/llm/generalChat.js", () => ({ askAI: vi.fn() }));
-vi.mock("../src/rag/answer.js", () => ({ answerFromDocuments: vi.fn() }));
-vi.mock("../src/rag/rewrite.js", () => ({ rewriteQuestion: vi.fn() }));
+vi.mock("../src/rag/answer.js", () => ({
+  answerFromDocuments: vi.fn(),
+  prefetchCandidates: vi.fn(),
+}));
+// Keep the real needsRewrite (which messages count as follow-ups); fake the LLM call.
+vi.mock("../src/rag/rewrite.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/rag/rewrite.js")>()),
+  rewriteQuestion: vi.fn(),
+}));
 vi.mock("../src/rag/router.js", () => ({ routeMessage: vi.fn() }));
 
 const { handleMessage } = await import("../src/chat/chatService.js");
@@ -30,8 +38,9 @@ const { findOrCreateConversation } = await import("../src/db/conversations.js");
 const { saveMessage, getRecentMessages } = await import("../src/db/messages.js");
 const { listCompletedFilenames } = await import("../src/db/documents.js");
 const { askAI } = await import("../src/llm/generalChat.js");
-const { answerFromDocuments } = await import("../src/rag/answer.js");
-const { rewriteQuestion } = await import("../src/rag/rewrite.js");
+const { answerFromDocuments, prefetchCandidates } = await import("../src/rag/answer.js");
+const { createAnswerLog } = await import("../src/db/answerLogs.js");
+const { needsRewrite, rewriteQuestion } = await import("../src/rag/rewrite.js");
 const { routeMessage } = await import("../src/rag/router.js");
 const { logger } = await import("../src/logger.js");
 const messages = await import("../src/messages.js");
@@ -55,9 +64,13 @@ beforeEach(() => {
   // The current message is saved first, so it is the last history entry.
   vi.mocked(getRecentMessages).mockResolvedValue([...earlier, current]);
   vi.mocked(listCompletedFilenames).mockResolvedValue(["Algorithm.pdf"]);
-  vi.mocked(rewriteQuestion).mockImplementation(async (text) => `بازنویسی: ${text}`);
+  // Like the real one: only follow-ups are rewritten.
+  vi.mocked(rewriteQuestion).mockImplementation(async (text, previous) =>
+    needsRewrite(text, previous) ? `بازنویسی: ${text}` : text,
+  );
   vi.mocked(answerFromDocuments).mockResolvedValue("جواب از جزوه");
   vi.mocked(askAI).mockResolvedValue("جواب عمومی");
+  vi.mocked(createAnswerLog).mockResolvedValue(77);
 });
 
 /** The final reply (the last message sent to the user). */
@@ -75,9 +88,106 @@ describe("handleMessage", () => {
       `بازنویسی: ${current.content}`,
       "focused",
       undefined,
+      undefined, // a follow-up is not searched before it is rewritten
+      expect.any(Object),
     );
+    expect(prefetchCandidates).not.toHaveBeenCalled();
     expect(saveMessage).toHaveBeenLastCalledWith(11, "assistant", "جواب از جزوه");
     expect(lastReply()).toBe("جواب از جزوه");
+  });
+
+  it("starts searching a standalone question while the router decides", async () => {
+    const question = "الگوریتم پریم چطور درخت پوشای کمینه را پیدا می‌کند و مرتبه اجرایی آن چیست؟";
+    const early = Promise.resolve({ question, documentId: 5, ranked: [] });
+    vi.mocked(prefetchCandidates).mockReturnValue(early);
+    vi.mocked(routeMessage).mockResolvedValue({ route: "document", retrievalMode: "focused" });
+
+    await handleMessage(CHAT_ID, question);
+
+    expect(prefetchCandidates).toHaveBeenCalledWith(USER_ID, question);
+    expect(answerFromDocuments).toHaveBeenCalledWith(
+      USER_ID,
+      question,
+      "focused",
+      undefined,
+      early,
+      expect.any(Object),
+    );
+  });
+
+  it("logs a document answer and attaches 👍/👎 buttons to it", async () => {
+    vi.mocked(routeMessage).mockResolvedValue({ route: "document", retrievalMode: "focused" });
+    vi.mocked(answerFromDocuments).mockImplementation(
+      async (_user, _q, _mode, _signal, _prefetch, trace) => {
+        trace!.documentId = 5;
+        trace!.context = [
+          { documentId: 5, filename: "a.pdf", pageNumber: 14, chunkIndex: 13, content: "x", isHit: true },
+        ];
+        return "جواب از جزوه";
+      },
+    );
+
+    await handleMessage(CHAT_ID, current.content);
+
+    expect(createAnswerLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: USER_ID,
+        question: current.content,
+        rewrittenQuestion: `بازنویسی: ${current.content}`,
+        route: "document",
+        retrievalMode: "focused",
+        documentId: 5,
+        context: [{ page: 14, pageEnd: null, chunkIndex: 13, isHit: true }],
+        answer: "جواب از جزوه",
+        latencyMs: expect.any(Number),
+      }),
+    );
+    expect(vi.mocked(sendMessage).mock.calls.at(-1)?.[2]).toEqual([
+      [
+        expect.objectContaining({ callback_data: "fb:77:1" }),
+        expect.objectContaining({ callback_data: "fb:77:-1" }),
+      ],
+    ]);
+  });
+
+  it("logs chat answers too", async () => {
+    vi.mocked(routeMessage).mockResolvedValue({ route: "chat", retrievalMode: "focused" });
+
+    await handleMessage(CHAT_ID, "سلام");
+
+    expect(createAnswerLog).toHaveBeenCalledWith(
+      expect.objectContaining({ route: "chat", question: "سلام", context: [] }),
+    );
+  });
+
+  it("does not log commands or add buttons to them", async () => {
+    await handleMessage(CHAT_ID, "/help");
+
+    expect(createAnswerLog).not.toHaveBeenCalled();
+    expect(vi.mocked(sendMessage).mock.calls.at(-1)?.[2]).toBeUndefined();
+  });
+
+  it("still sends the answer, without buttons, when logging fails", async () => {
+    vi.mocked(routeMessage).mockResolvedValue({ route: "chat", retrievalMode: "focused" });
+    vi.mocked(createAnswerLog).mockRejectedValue(new Error("db down"));
+    vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+    await expect(handleMessage(CHAT_ID, "سلام")).resolves.toBe(true);
+
+    expect(lastReply()).toBe("جواب عمومی");
+    expect(vi.mocked(sendMessage).mock.calls.at(-1)?.[2]).toBeUndefined();
+  });
+
+  it("ignores the early search when the message is chat", async () => {
+    vi.mocked(prefetchCandidates).mockReturnValue(
+      Promise.resolve({ question: "x", documentId: 5, ranked: [] }),
+    );
+    vi.mocked(routeMessage).mockResolvedValue({ route: "chat", retrievalMode: "focused" });
+
+    await handleMessage(CHAT_ID, "سلام، امروز حال و هوای درس خوندن ندارم، چیکار کنم که انگیزه بگیرم؟");
+
+    expect(answerFromDocuments).not.toHaveBeenCalled();
+    expect(lastReply()).toBe("جواب عمومی");
   });
 
   it("gives the router the earlier messages without repeating the current one", async () => {
