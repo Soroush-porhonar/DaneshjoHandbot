@@ -53,5 +53,5 @@ Desktop.ini
 # Local-only configuration
 *.local
 
-# Optional: local Ollama model files
-# models/
+# Local model files (reranker GGUF)
+models/

@@ -2,6 +2,7 @@ import { pool } from "../db/pool.js";
 import { config } from "../config.js";
 import { logger } from "../logger.js";
 import { generateEmbedding } from "./embeddings.js";
+import { rerankChunks } from "./rerank.js";
 
 export interface RetrievedChunk {
   documentId: number;
@@ -234,14 +235,17 @@ export async function retrieveContext(
   mode: ContextMode,
   documentId: number,
 ): Promise<ContextChunk[]> {
-  const hits = (
-    await retrieveRelevantChunks(
-      userId,
-      question,
-      config.rag.retrievalLimits[mode],
-      documentId,
-    )
-  ).map((hit) => ({ ...hit, isHit: true }));
+  const limit = config.rag.retrievalLimits[mode];
+  // With a reranker: fetch more candidates, let it pick the best `limit`.
+  const candidates = await retrieveRelevantChunks(
+    userId,
+    question,
+    config.reranker.enabled ? Math.max(limit, config.reranker.candidates) : limit,
+    documentId,
+  );
+  const hits = (await rerankChunks(question, candidates))
+    .slice(0, limit)
+    .map((hit) => ({ ...hit, isHit: true }));
 
   if (hits.length === 0) return [];
 

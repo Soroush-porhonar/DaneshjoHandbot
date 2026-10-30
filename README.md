@@ -36,7 +36,7 @@ Built with TypeScript, Node.js, PostgreSQL, pgvector, Ollama, and Qwen 3.5 9B.
 | Embeddings         | BGE-M3 (1024-d, batched)                                                         |
 | LLM inference      | Ollama, Qwen 3.5 9B (text + vision), explicit context window and per-task sampling |
 | Document pipeline  | PDF text extraction, Persian text normalization, page-aware chunking, hybrid OCR |
-| Retrieval          | Vector search, neighbour expansion, adaptive modes, LLM query rewriting          |
+| Retrieval          | Vector search + cross-encoder reranking (bge-reranker-v2-m3 on llama.cpp, CPU), neighbour expansion, adaptive modes, LLM query rewriting |
 | Conversation state | Persistent message history and active-document selection                         |
 | Testing            | Vitest unit tests with mocks, DB integration tests, coverage, GitHub Actions CI  |
 | Evaluation         | Retrieval, router, end-to-end answer, OCR and latency harnesses                  |
@@ -59,11 +59,11 @@ Built with TypeScript, Node.js, PostgreSQL, pgvector, Ollama, and Qwen 3.5 9B.
 
 | Harness                | What it measures                                                                                     | Current result (draft sets)                    |
 | ---------------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| `npm run eval`         | Retrieval on 71 questions over 6 documents (slides and long notes) by type (exact term, paraphrase, multi-page, follow-up, unanswerable): hit@k, MRR, context coverage, threshold calibration, diff vs previous run | hit@1 68%, hit@3 89%, MRR 0.80, answer page in context 95% |
+| `npm run eval`         | Retrieval on 71 questions over 6 documents (slides and long notes) by type (exact term, paraphrase, multi-page, follow-up, unanswerable): hit@k, MRR, context coverage, threshold calibration, diff vs previous run | hit@1 68% → 80% with reranker, MRR 0.80 → 0.87, answer page in context 97% |
 | `npm run eval:router`  | Router accuracy on 30 labelled messages, with a confusion matrix                                     | route 100%, route + mode 97%                   |
 | `npm run eval:answers` | Full pipeline: cites the right page, contains key facts, answers in Persian, refuses unanswerable questions; LLM-as-judge faithfulness | 25/25 pass, 6/6 unanswerable refused          |
 | `npm run eval:ocr`     | OCR character error rate against an automatic answer key (pages with a good text layer)             | prose 5–7% CER                                 |
-| `npm run benchmark`    | Time per stage (router, rewrite, retrieval, generation), p50/p95                                     | 8.5 s median; generation 76%, router 23%       |
+| `npm run benchmark`    | Time per stage (router, rewrite, retrieval, generation), p50/p95                                     | 10.5 s median; generation 56%, retrieval + rerank 27%, router 16% |
 
 **Found by measuring:** Ollama's default 4096-token context silently truncated long prompts; default sampling (temperature 1.0) was too random for factual answers; every citation was one page off and page 1 was never indexed; the follow-up rewriter sometimes answered instead of rewriting and once replaced a name ("روسو") with a hallucinated one — fixed with a few-shot prompt (follow-ups reaching the right context: 25% → 75%); unanswerable questions have the same vector distances as answerable ones, so the similarity threshold cannot filter them — grounding in the prompt has to (and does); the vision model reverses the letters of Persian words on slide pages (~60% CER). A chunking ablation on 65 questions over 6 documents (slides and 200-page notes) showed per-page chunks beat cross-page and semantic chunking on long notes (hit@1 50% vs 21% / 36%), because their pages already hold one subtopic each — so those variants stay off by default.
 
@@ -76,7 +76,7 @@ Built with TypeScript, Node.js, PostgreSQL, pgvector, Ollama, and Qwen 3.5 9B.
 
 ## Technology Stack
 
-`TypeScript` · `Node.js` · `PostgreSQL` · `pgvector` · `BGE-M3` · `Ollama` · `Qwen 3.5 9B` · `Vitest` · `Docker` · `Bale Bot API`
+`TypeScript` · `Node.js` · `PostgreSQL` · `pgvector` · `BGE-M3` · `Ollama` · `Qwen 3.5 9B` · `llama.cpp` · `bge-reranker-v2-m3` · `Vitest` · `Docker` · `Bale Bot API`
 
 ## Project Status
 
@@ -106,7 +106,8 @@ tests/               unit tests; tests/integration/ runs against a real database
 ## Getting started
 
 ```bash
-docker compose up -d          # PostgreSQL + pgvector
+mkdir -p models && curl -L -o models/bge-reranker-v2-m3-Q8_0.gguf https://huggingface.co/gpustack/bge-reranker-v2-m3-GGUF/resolve/main/bge-reranker-v2-m3-Q8_0.gguf
+docker compose up -d          # PostgreSQL + pgvector, reranker (CPU)
 npm install
 npm run migrate:up
 ollama pull qwen3.5:9b && ollama pull bge-m3

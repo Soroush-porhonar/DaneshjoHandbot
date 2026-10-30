@@ -25,6 +25,15 @@ export const config = {
     temperature: { rag: 0.2, router: 0, chat: 0.7 },
   },
 
+  /** Cross-encoder reranker (llama.cpp server in compose.yaml, runs on the CPU). */
+  reranker: {
+    enabled: process.env.RERANKER_ENABLED !== "false",
+    url: process.env.RERANKER_URL ?? "http://localhost:8081/v1/rerank",
+    /** Search returns this many candidates; the reranker keeps the best few. */
+    candidates: 10,
+    timeoutMs: 20_000,
+  },
+
   embedding: {
     url: process.env.OLLAMA_EMBED_URL ?? "http://localhost:11434/api/embed",
     model: required("EMBEDDING_MODEL"),

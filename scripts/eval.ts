@@ -22,6 +22,7 @@ import { performance } from "node:perf_hooks";
 import { config } from "../src/config.js";
 import { pool } from "../src/db/pool.js";
 import { retrieveContext, retrieveRelevantChunks } from "../src/rag/retrieve.js";
+import { rerankChunks } from "../src/rag/rerank.js";
 import { rewriteQuestion } from "../src/rag/rewrite.js";
 import type { HistoryMessage } from "../src/rag/rewrite.js";
 
@@ -51,6 +52,8 @@ interface Row {
   inContext: boolean;
   /** Rank after the follow-up was rewritten (follow_up only). */
   rewriteRank?: number;
+  /** Rank after the reranker re-ordered the top `limit` candidates. */
+  rerankRank: number;
   rewritten?: string;
   pages: string;
   ms: number;
@@ -130,6 +133,8 @@ for (const q of questions) {
 
   const distances = chunks.map((chunk) => Number(chunk.distance));
   const rank = rankOf(chunks, q.expectedPages);
+  // The same candidates re-ordered by the reranker (unchanged when it is off).
+  const rerankRank = rankOf(await rerankChunks(q.question, chunks), q.expectedPages);
   const wrongIndex = chunks.findIndex((chunk) => !covers(chunk, q.expectedPages));
 
   // Like production: follow-ups are rewritten before the context is built.
@@ -151,6 +156,7 @@ for (const q of questions) {
     type: q.type,
     filename: q.filename,
     rank,
+    rerankRank,
     distance:
       q.type === "negative" ? (distances[0] ?? null) : rank > 0 ? distances[rank - 1]! : null,
     wrongDistance: wrongIndex >= 0 ? distances[wrongIndex]! : null,
@@ -183,6 +189,7 @@ console.table(
     id: row.id,
     type: row.type,
     rank: row.type === "negative" ? "" : row.rank || "MISS",
+    reranked: row.type === "negative" ? "" : row.rerankRank || "MISS",
     dist: fmt(row.distance),
     wrong: fmt(row.wrongDistance),
     context: row.type === "negative" ? "" : row.inContext ? "yes" : "NO",
@@ -204,6 +211,9 @@ interface Metrics {
   hit3: number;
   hit5: number;
   mrr: number;
+  rerankHit1: number;
+  rerankHit3: number;
+  rerankMrr: number;
   context: number;
 }
 
@@ -211,13 +221,18 @@ function metrics(group: Row[]): Metrics {
   const n = group.length;
   const share = (test: (row: Row) => boolean) =>
     n === 0 ? 0 : group.filter(test).length / n;
+  const mrr = (rankOf: (row: Row) => number) =>
+    n === 0 ? 0 : group.reduce((sum, row) => sum + (rankOf(row) ? 1 / rankOf(row) : 0), 0) / n;
 
   return {
     n,
     hit1: share((row) => row.rank === 1),
     hit3: share((row) => row.rank >= 1 && row.rank <= 3),
     hit5: share((row) => row.rank >= 1 && row.rank <= 5),
-    mrr: n === 0 ? 0 : group.reduce((sum, row) => sum + (row.rank ? 1 / row.rank : 0), 0) / n,
+    mrr: mrr((row) => row.rank),
+    rerankHit1: share((row) => row.rerankRank === 1),
+    rerankHit3: share((row) => row.rerankRank >= 1 && row.rerankRank <= 3),
+    rerankMrr: mrr((row) => row.rerankRank),
     context: share((row) => row.inContext),
   };
 }
@@ -246,6 +261,9 @@ console.table(
         "hit@3": pct(m.hit3),
         "hit@5": pct(m.hit5),
         MRR: m.mrr.toFixed(3),
+        "reranked hit@1": pct(m.rerankHit1),
+        "reranked hit@3": pct(m.rerankHit3),
+        "reranked MRR": m.rerankMrr.toFixed(3),
         "in context": pct(m.context),
       },
     ]),
