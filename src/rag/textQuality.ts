@@ -30,8 +30,14 @@ export type PageAssessment = { ok: true } | { ok: false; reason: string };
 /** A single Arabic-script letter standing alone (و is a real one-letter word, so it is ignored). */
 const ISOLATED_LETTER = /^[\u0621-\u063A\u0641-\u064A\u067E\u0686\u0698\u06A9\u06AF\u06CC]$/;
 
-/** Share of isolated letters above which Persian text is considered broken (م ی کرد). */
-const BROKEN_LETTER_RATIO = 0.12;
+/**
+ * Share of isolated letters above which Persian text is considered broken (م ی کرد).
+ * Measured: pages with 12–43% isolated letters (testing notes, the COVID PDF)
+ * were searched and answered just as well from the text layer as after OCR
+ * (21 eval questions), while OCR cost ~45 s/page and sometimes garbled text.
+ * So only text worse than anything measured goes to OCR.
+ */
+const BROKEN_LETTER_RATIO = 0.5;
 const MIN_TOKENS_FOR_RATIO = 15;
 
 /**

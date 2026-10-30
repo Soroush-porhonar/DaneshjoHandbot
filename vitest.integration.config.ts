@@ -18,6 +18,7 @@ export default defineConfig({
       LOG_LEVEL: "error",
       // Off by default in production; on here so the feature stays tested.
       SECTION_EXPANSION: "true",
+      HYBRID_SEARCH: "true",
       RERANKER_ENABLED: "false",
     },
   },

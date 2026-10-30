@@ -57,6 +57,15 @@ export const config = {
       /** Running text: cut where the topic changes (sentence embeddings). */
       semantic: process.env.CHUNK_SEMANTIC === "true",
     },
+    /**
+     * Hybrid search: vector + keyword (full-text) results fused with Reciprocal Rank Fusion.
+     * Measured on 86 questions: vector search alone already has the right page in its
+     * top 10 for 82; keyword search added none (the misses are paraphrases with no
+     * shared words), and after reranking the results were identical. So it is off by default.
+     */
+    hybridSearch: process.env.HYBRID_SEARCH === "true",
+    /** RRF constant: each list adds 1 / (k + rank); 60 is the usual value. */
+    rrfK: 60,
     /** Slide decks: give the model the hit's whole section (no measured effect at the current context cap). */
     sectionExpansion: process.env.SECTION_EXPANSION === "true",
     /**

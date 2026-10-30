@@ -681,5 +681,122 @@
     "expectedPages": [110, 130],
     "mustInclude": ["قانون"],
     "filename": "جزوه درس آزمون نرم افزاراستاد زاغری 405.pdf"
+  },
+  {
+    "id": "sw-ocr30-test-locations",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "تست در محیط سازنده، محیط آزمایشگاهی و سایت مشتری چه فرقی با هم دارند؟",
+    "expectedPages": [7],
+    "mustInclude": ["یکپارچه"],
+    "filename": "جزوه درس آزمون نرم افزاراستاد زاغری 405.pdf"
+  },
+  {
+    "id": "sw-ocr30-process-aspects",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "فرایند تست در سازمان از چه جنبه‌هایی بررسی می‌شود؟",
+    "expectedPages": [33],
+    "mustInclude": ["فعالیت"],
+    "filename": "جزوه درس آزمون نرم افزاراستاد زاغری 405.pdf"
+  },
+  {
+    "id": "sw-ocr30-prioritization",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "تست کیس‌ها را بر چه اساسی اولویت‌بندی می‌کنیم؟",
+    "expectedPages": [49],
+    "mustInclude": ["ریسک"],
+    "filename": "جزوه درس آزمون نرم افزاراستاد زاغری 405.pdf"
+  },
+  {
+    "id": "sw-ocr30-psychology",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "وقتی تستر در کار دیگران ایراد پیدا می‌کند چه مشکل روانی ممکن است پیش بیاید؟",
+    "expectedPages": [87],
+    "mustInclude": ["نویسنده"],
+    "filename": "جزوه درس آزمون نرم افزاراستاد زاغری 405.pdf"
+  },
+  {
+    "id": "sw-ocr30-whitebox-skills",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "کسی که تست جعبه سفید انجام می‌دهد باید چه چیزهایی بلد باشد؟",
+    "expectedPages": [99],
+    "mustInclude": ["کد"],
+    "filename": "جزوه درس آزمون نرم افزاراستاد زاغری 405.pdf"
+  },
+  {
+    "id": "sw-ocr30-maintenance-triggers",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "چه عواملی باعث می‌شوند نرم‌افزار در دوره نگهداری دوباره تست شود؟",
+    "expectedPages": [100],
+    "mustInclude": ["تغییر"],
+    "filename": "جزوه درس آزمون نرم افزاراستاد زاغری 405.pdf"
+  },
+  {
+    "id": "sw-ocr30-state-transition-atm",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "تست انتقال وضعیت را با مثال دستگاه خودپرداز توضیح بده",
+    "expectedPages": [111, 112],
+    "mustInclude": ["وضعیت"],
+    "filename": "جزوه درس آزمون نرم افزاراستاد زاغری 405.pdf"
+  },
+  {
+    "id": "covid-author",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "نویسنده این متن کیست و چه تخصصی دارد؟",
+    "expectedPages": [1],
+    "mustInclude": ["رئیسی"],
+    "filename": "4_6023995269647959615.pdf"
+  },
+  {
+    "id": "covid-emergence",
+    "type": "exact_term",
+    "mode": "focused",
+    "question": "ویروس کرونا چه سالی ظهور کرد و چه علائمی ایجاد می‌کرد؟",
+    "expectedPages": [2],
+    "mustInclude": ["2019"],
+    "filename": "4_6023995269647959615.pdf"
+  },
+  {
+    "id": "covid-commensal",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "طبق متن، میکروب‌هایی که روی پوست و داخل بینی زندگی می‌کنند چه نقشی دارند؟",
+    "expectedPages": [4],
+    "mustInclude": ["همزیست"],
+    "filename": "4_6023995269647959615.pdf"
+  },
+  {
+    "id": "covid-distancing",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "به گفته نویسنده، دور نگه داشتن مردم از هم چه اثری بر بدن داشت؟",
+    "expectedPages": [5],
+    "mustInclude": ["ایمنی"],
+    "filename": "4_6023995269647959615.pdf"
+  },
+  {
+    "id": "covid-media-formula",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "نویسنده درباره نقش رسانه‌ها در آمار مرگ‌ومیر چه می‌گوید؟",
+    "expectedPages": [6],
+    "mustInclude": ["رسانه"],
+    "filename": "4_6023995269647959615.pdf"
+  },
+  {
+    "id": "covid-flu-deaths",
+    "type": "exact_term",
+    "mode": "focused",
+    "question": "سالانه چند نفر بر اثر آنفولانزا می‌میرند؟",
+    "expectedPages": [7],
+    "mustInclude": ["650"],
+    "filename": "4_6023995269647959615.pdf"
   }
 ]

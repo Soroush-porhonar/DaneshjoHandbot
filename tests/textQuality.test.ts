@@ -62,6 +62,14 @@ describe("assessPage", () => {
     expect(assessPage(code, 20)).toEqual({ ok: true });
   });
 
+  it("accepts text with many split letters that is still readable (measured: no OCR gain)", () => {
+    // From the COVID PDF's text layer: ~40% isolated letters.
+    const covid =
+      "بطور کل ی و ی روس ی به نام کرونا وجود داشت ی ک سو ی ه جد ی د از خانواده کرونا که سال ۲۰۱۹ ظهور کرد و ا ی جاد عالئم تنفس ی م ی کرد";
+
+    expect(assessPage(covid, 20)).toEqual({ ok: true });
+  });
+
   it("does not treat the word و as a broken letter", () => {
     expect(assessPage(Array(20).fill("و").join(" ") + " " + good, 20)).toEqual({ ok: true });
   });

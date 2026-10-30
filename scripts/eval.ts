@@ -22,7 +22,7 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { performance } from "node:perf_hooks";
 import { config } from "../src/config.js";
 import { pool } from "../src/db/pool.js";
-import { retrieveContext, retrieveRelevantChunks } from "../src/rag/retrieve.js";
+import { retrieveContext, retrieveRelevantChunks, searchCandidates } from "../src/rag/retrieve.js";
 import { rerankChunks } from "../src/rag/rerank.js";
 import { rewriteQuestion } from "../src/rag/rewrite.js";
 import type { HistoryMessage } from "../src/rag/rewrite.js";
@@ -53,7 +53,9 @@ interface Row {
   inContext: boolean;
   /** Rank after the follow-up was rewritten (follow_up only). */
   rewriteRank?: number;
-  /** Rank after the reranker re-ordered the top `limit` candidates. */
+  /** Rank in hybrid search (vector + keyword, RRF); equals `rank` when hybrid is off. */
+  hybridRank: number;
+  /** Rank after the reranker re-ordered the hybrid candidates (the production order). */
   rerankRank: number;
   rewritten?: string;
   pages: string;
@@ -145,8 +147,10 @@ for (const q of questions) {
 
   const distances = chunks.map((chunk) => Number(chunk.distance));
   const rank = rankOf(chunks, q.expectedPages);
-  // The same candidates re-ordered by the reranker (unchanged when it is off).
-  const rerankRank = rankOf(await rerankChunks(q.question, chunks), q.expectedPages);
+  // Hybrid search (vector + keyword, RRF), then the reranker on top, like production.
+  const hybrid = await searchCandidates(document.user_id, q.question, limit, document.id, NO_THRESHOLD);
+  const hybridRank = rankOf(hybrid, q.expectedPages);
+  const rerankRank = rankOf(await rerankChunks(q.question, hybrid), q.expectedPages);
   const wrongIndex = chunks.findIndex((chunk) => !covers(chunk, q.expectedPages));
 
   // Like production: follow-ups are rewritten before the context is built.
@@ -168,6 +172,7 @@ for (const q of questions) {
     type: q.type,
     filename: q.filename,
     rank,
+    hybridRank,
     rerankRank,
     distance:
       q.type === "negative" ? (distances[0] ?? null) : rank > 0 ? distances[rank - 1]! : null,
@@ -201,6 +206,7 @@ console.table(
     id: row.id,
     type: row.type,
     rank: row.type === "negative" ? "" : row.rank || "MISS",
+    hybrid: row.type === "negative" ? "" : row.hybridRank || "MISS",
     reranked: row.type === "negative" ? "" : row.rerankRank || "MISS",
     dist: fmt(row.distance),
     wrong: fmt(row.wrongDistance),
@@ -223,6 +229,8 @@ interface Metrics {
   hit3: number;
   hit5: number;
   mrr: number;
+  hybridHit1: number;
+  hybridMrr: number;
   rerankHit1: number;
   rerankHit3: number;
   rerankMrr: number;
@@ -242,6 +250,8 @@ function metrics(group: Row[]): Metrics {
     hit3: share((row) => row.rank >= 1 && row.rank <= 3),
     hit5: share((row) => row.rank >= 1 && row.rank <= 5),
     mrr: mrr((row) => row.rank),
+    hybridHit1: share((row) => row.hybridRank === 1),
+    hybridMrr: mrr((row) => row.hybridRank),
     rerankHit1: share((row) => row.rerankRank === 1),
     rerankHit3: share((row) => row.rerankRank >= 1 && row.rerankRank <= 3),
     rerankMrr: mrr((row) => row.rerankRank),
@@ -273,9 +283,11 @@ console.table(
         "hit@3": pct(m.hit3),
         "hit@5": pct(m.hit5),
         MRR: m.mrr.toFixed(3),
-        "reranked hit@1": pct(m.rerankHit1),
-        "reranked hit@3": pct(m.rerankHit3),
-        "reranked MRR": m.rerankMrr.toFixed(3),
+        "hybrid hit@1": pct(m.hybridHit1),
+        "hybrid MRR": m.hybridMrr.toFixed(3),
+        "+rerank hit@1": pct(m.rerankHit1),
+        "+rerank hit@3": pct(m.rerankHit3),
+        "+rerank MRR": m.rerankMrr.toFixed(3),
         "in context": pct(m.context),
       },
     ]),

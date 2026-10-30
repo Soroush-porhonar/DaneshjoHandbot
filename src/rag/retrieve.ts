@@ -3,6 +3,8 @@ import { config } from "../config.js";
 import { logger } from "../logger.js";
 import { generateEmbedding } from "./embeddings.js";
 import { rerankChunks } from "./rerank.js";
+import { PERSIAN_STOPWORDS } from "./stopwords.js";
+import { normalizeText } from "./textQuality.js";
 
 export interface RetrievedChunk {
   documentId: number;
@@ -77,8 +79,14 @@ export async function getDocumentChunks(
   return result.rows;
 }
 
+function checkLimit(limit: number): void {
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 20) {
+    throw new Error("Retrieval limit must be an integer between 1 and 20.");
+  }
+}
+
 /**
- * Retrieves chunks semantically relevant to a question.
+ * Retrieves chunks semantically relevant to a question (vector search only).
  * Used for focused and multi-part questions.
  */
 export async function retrieveRelevantChunks(
@@ -89,10 +97,18 @@ export async function retrieveRelevantChunks(
   /** Chunks farther than this are dropped; the eval passes a looser value. */
   maxDistance: number = config.rag.maxCosineDistance,
 ): Promise<RetrievedChunk[]> {
-  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 20) {
-    throw new Error("Retrieval limit must be an integer between 1 and 20.");
-  }
+  checkLimit(limit);
   const embedding = await generateEmbedding(question);
+  return vectorSearch(userId, embedding, limit, documentId, maxDistance);
+}
+
+async function vectorSearch(
+  userId: number,
+  embedding: number[],
+  limit: number,
+  documentId: number | undefined,
+  maxDistance: number,
+): Promise<RetrievedChunk[]> {
   const vector = `[${embedding.join(",")}]`;
 
   const result = await pool.query<RetrievedChunk>(
@@ -148,6 +164,109 @@ export async function retrieveRelevantChunks(
     })),
   );
   return result.rows;
+}
+
+/** The question's meaningful words for keyword search (common Persian words removed). */
+export function keywordTerms(question: string): string[] {
+  const words = normalizeText(question)
+    .toLowerCase()
+    .split(/[\s\p{P}\p{S}]+/u)
+    .filter((word) => word.length > 1 && !PERSIAN_STOPWORDS.has(word));
+
+  return [...new Set(words)];
+}
+
+/**
+ * Keyword search with PostgreSQL full-text ('simple' config): finds exact terms
+ * such as "29119", "JMeter" or "Q(14,3)" that embeddings may blur. Any of the
+ * question's words may match; chunks with more of them, closer together, rank higher.
+ */
+async function keywordSearch(
+  userId: number,
+  question: string,
+  embedding: number[],
+  limit: number,
+  documentId: number | undefined,
+): Promise<RetrievedChunk[]> {
+  const terms = keywordTerms(question);
+  if (terms.length === 0) return [];
+
+  const result = await pool.query<RetrievedChunk>(
+    `WITH q AS (
+       SELECT to_tsquery('simple', string_agg(quote_literal(lexeme), ' | ')) AS query
+       FROM unnest(tsvector_to_array(to_tsvector('simple', $2))) AS lexeme
+     )
+     SELECT
+       dc.document_id AS "documentId",
+       d.filename,
+       dc.page_number AS "pageNumber",
+       dc.page_end AS "pageEnd",
+       dc.chunk_index AS "chunkIndex",
+       dc.section_index AS "sectionIndex",
+       dc.content,
+       dc.embedding <=> $5::vector AS distance
+     FROM document_chunks dc
+     JOIN documents d ON d.id = dc.document_id
+     CROSS JOIN q
+     WHERE d.user_id = $1
+       AND d.status = 'completed'
+       AND ($4::integer IS NULL OR dc.document_id = $4)
+       AND dc.content_tsv @@ q.query
+     ORDER BY ts_rank_cd(dc.content_tsv, q.query) DESC, dc.chunk_index
+     LIMIT $3`,
+    [userId, terms.join(" "), limit, documentId ?? null, `[${embedding.join(",")}]`],
+  );
+
+  return result.rows;
+}
+
+/** Identifies a chunk across result lists. */
+const chunkKey = (chunk: RetrievedChunk) => `${chunk.documentId}:${chunk.chunkIndex}`;
+
+/**
+ * Reciprocal Rank Fusion: every list gives a chunk 1 / (k + rank); chunks found
+ * by several searches, or ranked high in one, come first. Uses ranks only, so
+ * vector distances and keyword scores never need to be on the same scale.
+ */
+export function fuseRankings(
+  lists: RetrievedChunk[][],
+  k: number = config.rag.rrfK,
+): RetrievedChunk[] {
+  const scores = new Map<string, { chunk: RetrievedChunk; score: number }>();
+
+  for (const list of lists) {
+    list.forEach((chunk, index) => {
+      const entry = scores.get(chunkKey(chunk)) ?? { chunk, score: 0 };
+      entry.score += 1 / (k + index + 1);
+      scores.set(chunkKey(chunk), entry);
+    });
+  }
+
+  return [...scores.values()]
+    .sort((a, b) => b.score - a.score)
+    .map((entry) => entry.chunk);
+}
+
+/**
+ * Search candidates for a question: vector search, plus keyword search fused
+ * with RRF when hybrid search is on. Keyword hits skip the distance cutoff,
+ * since an exact term match is evidence of its own.
+ */
+export async function searchCandidates(
+  userId: number,
+  question: string,
+  limit: number,
+  documentId?: number,
+  maxDistance: number = config.rag.maxCosineDistance,
+): Promise<RetrievedChunk[]> {
+  checkLimit(limit);
+  const embedding = await generateEmbedding(question);
+  const vectorHits = await vectorSearch(userId, embedding, limit, documentId, maxDistance);
+
+  if (!config.rag.hybridSearch) return vectorHits;
+
+  const keywordHits = await keywordSearch(userId, question, embedding, limit, documentId);
+  return fuseRankings([vectorHits, keywordHits]).slice(0, limit);
 }
 
 /** Chunks by position, plus every chunk of the given sections. */
@@ -237,7 +356,7 @@ export async function retrieveContext(
 ): Promise<ContextChunk[]> {
   const limit = config.rag.retrievalLimits[mode];
   // With a reranker: fetch more candidates, let it pick the best `limit`.
-  const candidates = await retrieveRelevantChunks(
+  const candidates = await searchCandidates(
     userId,
     question,
     config.reranker.enabled ? Math.max(limit, config.reranker.candidates) : limit,

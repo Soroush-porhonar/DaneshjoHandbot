@@ -31,7 +31,7 @@ const { deleteDocument, findDocumentFilename, listCompletedFilenames } = await i
   "../../src/db/documents.js"
 );
 const { isUpdateProcessed, markUpdateProcessed } = await import("../../src/db/updates.js");
-const { getDocumentChunks, retrieveContext, retrieveRelevantChunks } = await import(
+const { getDocumentChunks, retrieveContext, retrieveRelevantChunks, searchCandidates } = await import(
   "../../src/rag/retrieve.js"
 );
 const { ingestPdf } = await import("../../src/rag/ingest.js");
@@ -198,6 +198,35 @@ describe("retrieval", () => {
 
     // Hit 2, its neighbours 1 and 3, and the rest of its section (4); not other sections.
     expect(context.map((chunk) => chunk.chunkIndex)).toEqual([1, 2, 3, 4]);
+  });
+
+  it("hybrid search finds an exact term that vector search misses", async () => {
+    const alice = await addUser("alice");
+    const documentId = await addDocument(alice, "a.pdf", [5, 6, 7]);
+    // Chunk 2 mentions the term; its vector is far from the question's (#1).
+    await pool.query(
+      `UPDATE document_chunks SET content = 'استاندارد ISO 29119 برای فرایند تست'
+       WHERE document_id = $1 AND chunk_index = 2`,
+      [documentId],
+    );
+
+    const vectorOnly = await retrieveRelevantChunks(alice, "#1 29119", 10, documentId);
+    const hybrid = await searchCandidates(alice, "#1 29119", 10, documentId);
+
+    expect(vectorOnly).toEqual([]);
+    expect(hybrid.map((chunk) => chunk.chunkIndex)).toEqual([2]);
+  });
+
+  it("keyword search respects user isolation", async () => {
+    const alice = await addUser("alice");
+    const bob = await addUser("bob");
+    const bobsDocument = await addDocument(bob, "bob.pdf", [5]);
+    await pool.query(
+      `UPDATE document_chunks SET content = 'استاندارد 29119' WHERE document_id = $1`,
+      [bobsDocument],
+    );
+
+    await expect(searchCandidates(alice, "#1 29119", 10)).resolves.toEqual([]);
   });
 
   it("returns no context when nothing is close enough", async () => {
