@@ -3,7 +3,7 @@ import { chunkPages } from "../src/rag/chunk.js";
 
 describe("chunkPages", () => {
   it("returns no chunks for empty pages", () => {
-    expect(chunkPages([{ pageNumber: 1, text: "  \n " }])).toEqual([]);
+    expect(chunkPages([{ pageNumber: 1, text: "  \n ", method: "text" }])).toEqual([]);
   });
 
   it("keeps each page's number and numbers chunks continuously", () => {
@@ -29,7 +29,7 @@ describe("chunkPages", () => {
   });
 
   it("normalizes text before chunking", () => {
-    const [chunk] = chunkPages([{ pageNumber: 1, text: "مثال\t6\t:" }]);
+    const [chunk] = chunkPages([{ pageNumber: 1, text: "مثال\t6\t:", method: "text" }]);
 
     expect(chunk?.content).toBe("مثال 6 :");
   });

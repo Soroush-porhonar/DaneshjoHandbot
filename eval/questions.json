@@ -1,120 +1,386 @@
 [
   {
     "id": "ds1-fact-iter",
+    "type": "exact_term",
     "mode": "focused",
     "question": "تابع فاکتوریل به صورت غیر بازگشتی چگونه نوشته می‌شود؟",
-    "expectedPages": [
-      10
-    ],
+    "expectedPages": [10],
+    "mustInclude": ["for"],
     "filename": "DataStructure_Chapter1.pdf"
   },
   {
     "id": "ds1-q-14-3",
+    "type": "exact_term",
     "mode": "focused",
     "question": "مقدار Q(14,3) چند می‌شود و چگونه محاسبه می‌شود؟",
-    "expectedPages": [
-      22
-    ],
+    "expectedPages": [22],
+    "mustInclude": ["4"],
     "filename": "DataStructure_Chapter1.pdf"
   },
   {
     "id": "ds1-hanoi",
+    "type": "exact_term",
     "mode": "focused",
     "question": "تابع بازگشتی مسئله برج‌های هانوی را توضیح بده",
-    "expectedPages": [
-      30
-    ],
+    "expectedPages": [30],
     "filename": "DataStructure_Chapter1.pdf"
   },
   {
     "id": "ds1-recursion-stack",
+    "type": "paraphrase",
     "mode": "multi_part",
     "question": "فراخوانی‌های بازگشتی را چگونه نمایش می‌دهیم و پشته چه نقشی دارد؟",
-    "expectedPages": [
-      18
+    "expectedPages": [18],
+    "filename": "DataStructure_Chapter1.pdf"
+  },
+  {
+    "id": "ds1-memory-cost",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "چرا وقتی یک تابع خودش را صدا می‌زند حافظه زیادی مصرف می‌شود؟",
+    "expectedPages": [8, 13],
+    "mustInclude": ["پشته"],
+    "filename": "DataStructure_Chapter1.pdf"
+  },
+  {
+    "id": "ds1-pros-cons",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "استفاده از بازگشت به جای حلقه چه خوبی‌ها و بدی‌هایی دارد؟",
+    "expectedPages": [13],
+    "filename": "DataStructure_Chapter1.pdf"
+  },
+  {
+    "id": "ds1-lifo",
+    "type": "exact_term",
+    "mode": "focused",
+    "question": "LIFO یعنی چه؟",
+    "expectedPages": [9],
+    "mustInclude": ["آخرین"],
+    "filename": "DataStructure_Chapter1.pdf"
+  },
+  {
+    "id": "ds1-f-3-6",
+    "type": "exact_term",
+    "mode": "focused",
+    "question": "خروجی F(3,6) چند است؟",
+    "expectedPages": [17, 19],
+    "filename": "DataStructure_Chapter1.pdf"
+  },
+  {
+    "id": "ds1-hanoi-moves",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "اگر سه دیسک داشته باشیم برای جابه‌جا کردن همه‌شان چند حرکت لازم است؟",
+    "expectedPages": [28],
+    "mustInclude": ["7"],
+    "filename": "DataStructure_Chapter1.pdf"
+  },
+  {
+    "id": "ds1-mult-tree",
+    "type": "multi_page",
+    "mode": "multi_part",
+    "question": "تابع بازگشتی ضرب دو عدد را بنویس و درخت بازگشتی آن را توضیح بده",
+    "expectedPages": [14, 15, 16],
+    "filename": "DataStructure_Chapter1.pdf"
+  },
+  {
+    "id": "ds1-test-output",
+    "type": "exact_term",
+    "mode": "focused",
+    "question": "خروجی تابع Test(4) چیست؟",
+    "expectedPages": [24, 25],
+    "mustInclude": ["0,10", "3,13"],
+    "filename": "DataStructure_Chapter1.pdf"
+  },
+  {
+    "id": "ds1-followup-pow",
+    "type": "follow_up",
+    "mode": "focused",
+    "history": [
+      { "role": "user", "content": "تابع بازگشتی توان a به b رو چطور می‌نویسیم؟" },
+      { "role": "assistant", "content": "تابع pow(a,b) اگر b برابر ۱ باشد a را برمی‌گرداند و در غیر این صورت a*pow(a,b-1) را برمی‌گرداند." }
     ],
+    "question": "درختش رو هم توضیح بده",
+    "expectedPages": [20, 21],
+    "filename": "DataStructure_Chapter1.pdf"
+  },
+  {
+    "id": "ds1-neg-quicksort",
+    "type": "negative",
+    "mode": "focused",
+    "question": "مرتب‌سازی سریع (Quick Sort) چگونه محور را انتخاب می‌کند؟",
+    "expectedPages": [],
     "filename": "DataStructure_Chapter1.pdf"
   },
   {
     "id": "ds2-notation",
+    "type": "exact_term",
     "mode": "multi_part",
     "question": "رابطه بین نمادهای O و Ω و Θ چیست؟",
-    "expectedPages": [
-      30
-    ],
+    "expectedPages": [30],
     "filename": "DataStructure_Chapter2.pdf"
   },
   {
     "id": "ds2-time-factors",
+    "type": "exact_term",
     "mode": "focused",
     "question": "فاکتورهای مهم ارزیابی یک الگوریتم کدامند؟",
-    "expectedPages": [
-      2
-    ],
+    "expectedPages": [2],
     "filename": "DataStructure_Chapter2.pdf"
   },
   {
     "id": "ds2-recursive-order",
+    "type": "exact_term",
     "mode": "focused",
     "question": "مرتبه اجرایی توابع بازگشتی را چطور محاسبه می‌کنیم؟",
-    "expectedPages": [
-      34
+    "expectedPages": [34],
+    "filename": "DataStructure_Chapter2.pdf"
+  },
+  {
+    "id": "ds2-halving-loop",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "حلقه‌ای که هر بار شمارنده‌اش نصف می‌شود چند بار اجرا می‌شود؟",
+    "expectedPages": [13, 14, 24, 25],
+    "filename": "DataStructure_Chapter2.pdf"
+  },
+  {
+    "id": "ds2-hanoi-order",
+    "type": "exact_term",
+    "mode": "focused",
+    "question": "مرتبه اجرایی الگوریتم بازگشتی برج‌های هانوی چیست؟",
+    "expectedPages": [36, 37],
+    "filename": "DataStructure_Chapter2.pdf"
+  },
+  {
+    "id": "ds2-worst-best",
+    "type": "exact_term",
+    "mode": "focused",
+    "question": "W(n) و B(n) در تحلیل الگوریتم چه هستند؟",
+    "expectedPages": [16],
+    "mustInclude": ["بدترین", "بهترین"],
+    "filename": "DataStructure_Chapter2.pdf"
+  },
+  {
+    "id": "ds2-fib-slow",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "چرا محاسبه فیبوناچی به روش بازگشتی کند است؟",
+    "expectedPages": [42, 43],
+    "filename": "DataStructure_Chapter2.pdf"
+  },
+  {
+    "id": "ds2-growth-order",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "ترتیب رشد توابع مهم از کمترین به بیشترین چیست؟",
+    "expectedPages": [28],
+    "filename": "DataStructure_Chapter2.pdf"
+  },
+  {
+    "id": "ds2-compare-criteria",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "اگر دو برنامه زمان اجرای یکسانی داشته باشند، کدام بهتر است؟",
+    "expectedPages": [46],
+    "mustInclude": ["حافظه"],
+    "filename": "DataStructure_Chapter2.pdf"
+  },
+  {
+    "id": "ds2-followup-omega",
+    "type": "follow_up",
+    "mode": "focused",
+    "history": [
+      { "role": "user", "content": "نماد O در مرتبه اجرایی یعنی چه؟" },
+      { "role": "assistant", "content": "نماد O حد بالا برای رشد یک تابع است؛ یعنی رشد g بزرگ‌تر یا مساوی رشد f است." }
     ],
+    "question": "و امگا چی؟",
+    "expectedPages": [29],
+    "filename": "DataStructure_Chapter2.pdf"
+  },
+  {
+    "id": "ds2-neg-mergesort",
+    "type": "negative",
+    "mode": "focused",
+    "question": "مرتب‌سازی ادغامی آرایه را چگونه به دو نیمه تقسیم و دوباره ادغام می‌کند؟",
+    "expectedPages": [],
     "filename": "DataStructure_Chapter2.pdf"
   },
   {
     "id": "alg-kruskal",
+    "type": "exact_term",
     "mode": "focused",
     "question": "الگوریتم کروسکال چه ویژگی‌ای دارد و زمان اجرای آن به چه چیزی بستگی دارد؟",
-    "expectedPages": [
-      18
-    ],
+    "expectedPages": [18],
     "filename": "Algorithm-Chapter4.pdf"
   },
   {
     "id": "alg-dijkstra",
+    "type": "exact_term",
     "mode": "focused",
     "question": "الگوریتم دایجکسترا چگونه کار می‌کند؟",
-    "expectedPages": [
-      22
-    ],
+    "expectedPages": [22],
     "filename": "Algorithm-Chapter4.pdf"
   },
   {
     "id": "alg-huffman",
+    "type": "exact_term",
     "mode": "focused",
     "question": "الگوریتم هافمن برای چه کاری استفاده می‌شود؟",
-    "expectedPages": [
-      26
-    ],
+    "expectedPages": [26],
     "filename": "Algorithm-Chapter4.pdf"
   },
   {
     "id": "alg-prim-vs-tree",
+    "type": "multi_page",
     "mode": "multi_part",
     "question": "درخت پوشا چیست و الگوریتم پریم چه محدودیت‌هایی دارد؟",
-    "expectedPages": [
-      6,
-      14
+    "expectedPages": [6, 14],
+    "filename": "Algorithm-Chapter4.pdf"
+  },
+  {
+    "id": "alg-mst",
+    "type": "exact_term",
+    "mode": "focused",
+    "question": "MST یعنی چه؟",
+    "expectedPages": [8],
+    "filename": "Algorithm-Chapter4.pdf"
+  },
+  {
+    "id": "alg-greedy-not-optimal",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "آیا روش حریصانه همیشه بهترین جواب را می‌دهد؟ یک مثال بزن",
+    "expectedPages": [4],
+    "mustInclude": ["12"],
+    "filename": "Algorithm-Chapter4.pdf"
+  },
+  {
+    "id": "alg-kruskal-order",
+    "type": "exact_term",
+    "mode": "focused",
+    "question": "مرتبه اجرایی کروسکال برای گراف خلوت و شلوغ چقدر است؟",
+    "expectedPages": [19],
+    "mustInclude": ["nlogn"],
+    "filename": "Algorithm-Chapter4.pdf"
+  },
+  {
+    "id": "alg-activity",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "چند سخنران می‌خواهند از یک سالن استفاده کنند؛ چطور بیشترین تعداد را بدون تداخل انتخاب کنیم؟",
+    "expectedPages": [40, 41],
+    "filename": "Algorithm-Chapter4.pdf"
+  },
+  {
+    "id": "alg-huffman-code-b",
+    "type": "exact_term",
+    "mode": "focused",
+    "question": "در مثال هافمن کد عنصر B چیست؟",
+    "expectedPages": [33],
+    "mustInclude": ["11011"],
+    "filename": "Algorithm-Chapter4.pdf"
+  },
+  {
+    "id": "alg-knapsack",
+    "type": "multi_page",
+    "mode": "multi_part",
+    "question": "کوله‌پشتی کسری و صفر و یک چه فرقی دارند و روش حریصانه کدام را حل می‌کند؟",
+    "expectedPages": [46, 47],
+    "mustInclude": ["کسری", "صفر و یک"],
+    "filename": "Algorithm-Chapter4.pdf"
+  },
+  {
+    "id": "alg-deadlines",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "کارهایی که هر کدام مهلت و سود دارند را چطور زمان‌بندی کنیم تا سود بیشتری بگیریم؟",
+    "expectedPages": [35, 37],
+    "filename": "Algorithm-Chapter4.pdf"
+  },
+  {
+    "id": "alg-followup-prim-order",
+    "type": "follow_up",
+    "mode": "focused",
+    "history": [
+      { "role": "user", "content": "الگوریتم پریم چطور درخت پوشای کمینه رو پیدا می‌کنه؟" },
+      { "role": "assistant", "content": "پریم از یک راس شروع می‌کند و در هر مرحله نزدیک‌ترین راس بیرون از مجموعه Y را اضافه می‌کند تا همه رئوس اضافه شوند." }
     ],
+    "question": "مرتبه‌اش چنده؟",
+    "expectedPages": [14],
+    "mustInclude": ["n2"],
+    "filename": "Algorithm-Chapter4.pdf"
+  },
+  {
+    "id": "alg-neg-bellman",
+    "type": "negative",
+    "mode": "focused",
+    "question": "الگوریتم بلمن-فورد یال‌های با وزن منفی را چگونه مدیریت می‌کند؟",
+    "expectedPages": [],
     "filename": "Algorithm-Chapter4.pdf"
   },
   {
     "id": "lisbon-cause",
+    "type": "paraphrase",
     "mode": "focused",
     "question": "علت طبیعی زلزله لیسبون چه بود و این پرسش چه تغییری در تفکر ایجاد کرد؟",
-    "expectedPages": [
-      4
-    ],
+    "expectedPages": [4],
     "filename": "زلزلهٔ لیسبون ۱۷۵۵.pdf"
   },
   {
     "id": "lisbon-rebuild",
+    "type": "paraphrase",
     "mode": "focused",
     "question": "لیسبون پس از زلزله چگونه بازسازی شد؟",
-    "expectedPages": [
-      9
+    "expectedPages": [9],
+    "filename": "زلزلهٔ لیسبون ۱۷۵۵.pdf"
+  },
+  {
+    "id": "lisbon-date",
+    "type": "exact_term",
+    "mode": "focused",
+    "question": "زلزله لیسبون در چه روزی رخ داد؟",
+    "expectedPages": [2],
+    "mustInclude": ["نوامبر"],
+    "filename": "زلزلهٔ لیسبون ۱۷۵۵.pdf"
+  },
+  {
+    "id": "lisbon-voltaire",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "ولتر چه واکنشی به این فاجعه نشان داد؟",
+    "expectedPages": [5, 6],
+    "mustInclude": ["خوش‌بینی"],
+    "filename": "زلزلهٔ لیسبون ۱۷۵۵.pdf"
+  },
+  {
+    "id": "lisbon-enlightenment",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "آیا این زلزله آغاز عصر روشنگری بود؟",
+    "expectedPages": [7, 10],
+    "filename": "زلزلهٔ لیسبون ۱۷۵۵.pdf"
+  },
+  {
+    "id": "lisbon-followup-rousseau",
+    "type": "follow_up",
+    "mode": "focused",
+    "history": [
+      { "role": "user", "content": "ولتر درباره زلزله لیسبون چه نظری داشت؟" },
+      { "role": "assistant", "content": "ولتر خوش‌بینی رایج را زیر سؤال برد و شعری درباره فاجعه لیسبون نوشت." }
     ],
+    "question": "روسو چی؟",
+    "expectedPages": [6],
+    "mustInclude": ["روسو"],
+    "filename": "زلزلهٔ لیسبون ۱۷۵۵.pdf"
+  },
+  {
+    "id": "lisbon-neg-tokyo",
+    "type": "negative",
+    "mode": "focused",
+    "question": "زلزله کانتو در توکیو در سال ۱۹۲۳ چند قربانی داشت؟",
+    "expectedPages": [],
     "filename": "زلزلهٔ لیسبون ۱۷۵۵.pdf"
   }
 ]

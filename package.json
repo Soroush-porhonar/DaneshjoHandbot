@@ -9,10 +9,16 @@
     "migrate:up": "node-pg-migrate up",
     "dev": "tsx watch src/main.ts",
     "start": "tsx src/main.ts",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc -p tsconfig.check.json",
     "eval": "tsx scripts/eval.ts",
     "reset-data": "tsx scripts/reset-data.ts",
-    "ingest": "tsx scripts/ingest-files.ts"
+    "ingest": "tsx scripts/ingest-files.ts",
+    "eval:router": "tsx scripts/eval-router.ts",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:coverage": "vitest run --coverage",
+    "eval:answers": "tsx scripts/eval-answers.ts",
+    "eval:ocr": "tsx scripts/eval-ocr.ts",
+    "benchmark": "tsx scripts/benchmark.ts"
   },
   "keywords": [],
   "author": "",
@@ -21,6 +27,7 @@
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.5",
     "@types/pg": "^8.23.1",
+    "@vitest/coverage-v8": "^5.0.5",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"

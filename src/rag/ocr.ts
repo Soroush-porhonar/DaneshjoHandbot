@@ -19,7 +19,7 @@ export interface ExtractionResult {
 }
 
 /** Reads one page image with the vision model; returns "" if the output is unusable. */
-async function ocrPage(
+export async function ocrPage(
   pdf: PdfHandle,
   pageNumber: number,
   signal?: AbortSignal,

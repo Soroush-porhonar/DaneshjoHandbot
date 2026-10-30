@@ -1,0 +1,71 @@
+[
+  { "id": "hello", "message": "سلام خوبی؟", "route": "chat" },
+  { "id": "thanks", "message": "مرسی، خیلی کمکم کردی", "route": "chat" },
+  { "id": "who-are-you", "message": "تو کی هستی؟", "route": "chat" },
+  { "id": "joke", "message": "یه جوک بگو بخندیم", "route": "chat" },
+  { "id": "weather", "message": "هوای تهران فردا چطوره؟", "route": "chat" },
+  { "id": "football", "message": "به نظرت کدوم تیم قهرمان جام جهانی میشه؟", "route": "chat" },
+  { "id": "recipe", "message": "طرز تهیه قورمه سبزی رو بگو", "route": "chat" },
+  { "id": "motivation", "message": "حوصله درس خوندن ندارم، چیکار کنم؟", "route": "chat" },
+  { "id": "english-hi", "message": "hi, how are you?", "route": "chat" },
+  { "id": "bye", "message": "خداحافظ فعلا", "route": "chat" },
+
+  { "id": "def-recursion", "message": "تابع بازگشتی چیست؟", "route": "document", "mode": "focused" },
+  { "id": "def-mst", "message": "درخت پوشای کمینه یعنی چی؟", "route": "document", "mode": "focused" },
+  { "id": "huffman-code", "message": "کد هافمن عنصر B چی میشه؟", "route": "document", "mode": "focused" },
+  { "id": "lisbon-date", "message": "زلزله لیسبون کی اتفاق افتاد؟", "route": "document", "mode": "focused" },
+  { "id": "big-o", "message": "نماد O بزرگ رو توضیح بده", "route": "document", "mode": "focused" },
+  { "id": "dijkstra-how", "message": "دایجکسترا چطور کار می‌کنه؟", "route": "document", "mode": "focused" },
+  { "id": "english-concept", "message": "what is a greedy algorithm?", "route": "document", "mode": "focused" },
+
+  { "id": "prim-vs-kruskal", "message": "فرق پریم و کروسکال چیه و مرتبه اجرایی هر کدوم چنده؟", "route": "document", "mode": "multi_part" },
+  { "id": "notations", "message": "نمادهای O و امگا و تتا رو تعریف کن و با هم مقایسه کن", "route": "document", "mode": "multi_part" },
+  { "id": "voltaire-rousseau", "message": "ولتر و روسو هر کدوم چه واکنشی به زلزله لیسبون داشتن؟", "route": "document", "mode": "multi_part" },
+  { "id": "knapsack-two", "message": "کوله‌پشتی کسری و صفر و یک چیه و روش حریصانه کدومو حل می‌کنه؟", "route": "document", "mode": "multi_part" },
+  { "id": "recursion-pros-stack", "message": "مزایا و معایب بازگشت چیه و پشته چه نقشی داره؟", "route": "document", "mode": "multi_part" },
+
+  { "id": "summarize-chapter", "message": "فصل چهارم الگوریتم رو خلاصه کن", "route": "document", "mode": "broad" },
+  { "id": "key-points", "message": "مهم‌ترین نکات جزوه ساختمان داده فصل اول چیه؟", "route": "document", "mode": "broad" },
+  { "id": "overview-lisbon", "message": "یه مرور کلی از کل متن زلزله لیسبون بده", "route": "document", "mode": "broad" },
+  { "id": "exam-review", "message": "برای امتحان، همه مطالب فصل دوم رو برام جمع‌بندی کن", "route": "document", "mode": "broad" },
+
+  {
+    "id": "followup-more",
+    "history": [
+      { "role": "user", "content": "تابع بازگشتی فاکتوریل چطور کار می‌کنه؟" },
+      { "role": "assistant", "content": "fact(n) اگر n کوچک‌تر یا مساوی ۱ باشد ۱ برمی‌گرداند و گرنه n*fact(n-1)." }
+    ],
+    "message": "بیشتر توضیح بده",
+    "route": "document",
+    "mode": "focused"
+  },
+  {
+    "id": "followup-example",
+    "history": [
+      { "role": "user", "content": "روش حریصانه چیه؟" },
+      { "role": "assistant", "content": "در هر مرحله بهترین انتخاب فعلی بدون توجه به انتخاب‌های قبلی یا بعدی انجام می‌شود." }
+    ],
+    "message": "یه مثال بزن",
+    "route": "document",
+    "mode": "focused"
+  },
+  {
+    "id": "followup-pronoun",
+    "history": [
+      { "role": "user", "content": "الگوریتم پریم چیه؟" },
+      { "role": "assistant", "content": "پریم درخت پوشای کمینه را با اضافه کردن نزدیک‌ترین راس در هر مرحله می‌سازد." }
+    ],
+    "message": "مرتبه‌اش چنده؟",
+    "route": "document",
+    "mode": "focused"
+  },
+  {
+    "id": "followup-thanks",
+    "history": [
+      { "role": "user", "content": "LIFO یعنی چی؟" },
+      { "role": "assistant", "content": "یعنی آخرین عنصری که وارد پشته شده، اولین عنصری است که خارج می‌شود." }
+    ],
+    "message": "آهان فهمیدم، دمت گرم",
+    "route": "chat"
+  }
+]

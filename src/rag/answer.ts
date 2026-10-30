@@ -143,6 +143,7 @@ async function answerFocusedQuestion(
   return appendSources(answer, chunks);
 }
 
+/** Answers from the user's selected document. */
 export async function answerFromDocuments(
   userId: number,
   question: string,
@@ -155,6 +156,17 @@ export async function answerFromDocuments(
     return NO_DOCUMENT_SELECTED_TEXT;
   }
 
+  return answerFromDocument(userId, documentId, question, retrievalMode, signal);
+}
+
+/** Answers from one specific document (also used by the answer eval). */
+export async function answerFromDocument(
+  userId: number,
+  documentId: number,
+  question: string,
+  retrievalMode: RetrievalMode,
+  signal?: AbortSignal,
+): Promise<string> {
   if (retrievalMode === "broad") {
     return answerBroadQuestion(userId, documentId, question, signal);
   }

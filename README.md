@@ -38,7 +38,8 @@ Built with TypeScript, Node.js, PostgreSQL, pgvector, Ollama, and Qwen 3.5 9B.
 | Document pipeline  | PDF text extraction, Persian text normalization, page-aware chunking, hybrid OCR |
 | Retrieval          | Vector search, neighbour expansion, adaptive modes, LLM query rewriting          |
 | Conversation state | Persistent message history and active-document selection                         |
-| Testing & eval     | Vitest unit tests, retrieval evaluation harness (hit@k, MRR, context coverage)   |
+| Testing            | Vitest unit tests with mocks, DB integration tests, coverage, GitHub Actions CI  |
+| Evaluation         | Retrieval, router, end-to-end answer, OCR and latency harnesses                  |
 | Deployment         | Docker Compose (PostgreSQL + pgvector)                                           |
 
 ## Architecture & Implementation
@@ -53,9 +54,23 @@ Built with TypeScript, Node.js, PostgreSQL, pgvector, Ollama, and Qwen 3.5 9B.
 
 ## Quality & Engineering
 
-- **Evaluation-driven tuning:** `npm run eval` measures retrieval on a question set (hit@k, MRR, and whether the answer page reaches the model's context) so each change is kept only if it helps.
-- **Findings from measurement:** Ollama's default 4096-token context was silently truncating long prompts, and the model's default sampling (temperature 1.0) was too random for factual answers — both fixed. A page-numbering bug in text extraction (every citation one page off, page 1 never indexed) was found and fixed.
-- **Tests:** `npm test` runs unit tests for chunking, text normalization, page-quality detection, retrieval context merging, batching, query rewriting, source citations, command parsing, and a guard that keeps every user-facing message Persian and consistent.
+### Evaluation (does the AI do the right thing?)
+
+| Harness                | What it measures                                                                                     | Current result (draft sets)                    |
+| ---------------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `npm run eval`         | Retrieval on 44 questions by type (exact term, paraphrase, multi-page, follow-up, unanswerable): hit@k, MRR, context coverage, threshold calibration, diff vs previous run | hit@1 65%, hit@3 88%, MRR 0.79, answer page in context 90% |
+| `npm run eval:router`  | Router accuracy on 30 labelled messages, with a confusion matrix                                     | route 100%, route + mode 97%                   |
+| `npm run eval:answers` | Full pipeline: cites the right page, contains key facts, answers in Persian, refuses unanswerable questions; LLM-as-judge faithfulness | 20/20 pass, 4/4 unanswerable refused          |
+| `npm run eval:ocr`     | OCR character error rate against an automatic answer key (pages with a good text layer)             | prose 5–7% CER                                 |
+| `npm run benchmark`    | Time per stage (router, rewrite, retrieval, generation), p50/p95                                     | 8.5 s median; generation 76%, router 23%       |
+
+**Found by measuring:** Ollama's default 4096-token context silently truncated long prompts; default sampling (temperature 1.0) was too random for factual answers; every citation was one page off and page 1 was never indexed; the follow-up rewriter sometimes answered instead of rewriting and once replaced a name ("روسو") with a hallucinated one — fixed with a few-shot prompt (follow-ups reaching the right context: 25% → 75%); unanswerable questions have the same vector distances as answerable ones, so the similarity threshold cannot filter them — grounding in the prompt has to (and does); the vision model reverses the letters of Persian words on slide pages (~60% CER).
+
+### Tests (does the code stay correct?)
+
+- **Unit tests** (`npm test`, 212 tests, < 1 s): pure logic (chunking, normalization, page-quality detection, context merging, citations) plus mocked flows — update deduplication and retry, `/cancel`, the chat pipeline, Ollama timeouts and bad responses, the OCR loop, delete confirmation.
+- **Integration tests** (`npm run test:integration`): real PostgreSQL + pgvector with fake embeddings — one user can never search, select or delete another user's documents (verified by deliberately breaking the SQL filter and watching the tests fail), cascade deletes, failed ingestion stores nothing.
+- **CI:** GitHub Actions runs type checks (including tests and scripts), unit tests with coverage, and integration tests on every push.
 - **Clean layering:** configuration, prompts, user-facing messages, SQL, and platform code each live in one place.
 
 ## Technology Stack
@@ -82,9 +97,9 @@ src/
   rag/               router, ingest, OCR, chunking, retrieval, query rewriting, answers
   db/                one module per table; all SQL lives here
 migrations/          node-pg-migrate schema migrations
-scripts/             eval harness, data reset, local PDF ingestion
-eval/                retrieval evaluation questions
-tests/               vitest unit tests
+scripts/             evaluation harnesses, benchmark, data reset, local PDF ingestion
+eval/                labelled question sets (results go to eval/results/, not committed)
+tests/               unit tests; tests/integration/ runs against a real database
 ```
 
 ## Getting started
@@ -96,7 +111,8 @@ npm run migrate:up
 ollama pull qwen3.5:9b && ollama pull bge-m3
 npm run dev                   # start the bot
 npm test                      # unit tests
-npm run eval                  # retrieval evaluation
+npm run test:integration      # database tests (creates daneshjohandbot_test)
+npm run eval                  # retrieval evaluation (also: eval:router, eval:answers, eval:ocr, benchmark)
 ```
 
 Configure `.env` with `BALE_TOKEN`, `DATABASE_URL`, `LLM_URL`, `LLM_MODEL`, `EMBEDDING_MODEL`, `PORT`, and the Postgres credentials.

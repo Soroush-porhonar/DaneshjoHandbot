@@ -39,6 +39,7 @@ storage/
 
 # Coverage and test output
 coverage/
+eval/results/
 
 # IDEs and editors
 .vscode/

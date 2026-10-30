@@ -1,25 +1,63 @@
 /**
  * Retrieval evaluation: for each question, checks whether a page that contains
- * the answer shows up in the top-k retrieved chunks.
+ * the answer is found, how high it ranks, and whether it reaches the model.
  *
- *   npm run eval              # all questions
- *   npm run eval -- --limit 10 --only lisbon
+ *   npm run eval                          # all questions
+ *   npm run eval -- --only lisbon         # questions whose id contains "lisbon"
+ *   npm run eval -- --no-rewrite          # skip LLM rewriting of follow-ups
+ *   npm run eval -- --no-save             # don't write eval/results/*.json
  *
- * eval/questions.json entries are DRAFTS generated from the document text;
- * review/extend them with real questions from your own usage.
+ * Question types (eval/questions.json):
+ *   exact_term  - uses the same words as the slide (names, formulas, acronyms)
+ *   paraphrase  - asks the same thing in different words
+ *   multi_page  - the answer is spread over several pages
+ *   follow_up   - only makes sense with the earlier conversation ("history")
+ *   negative    - the answer is NOT in the document (expectedPages: [])
+ *
+ * Each run is saved and compared with the previous one, so a change that makes
+ * some questions worse is visible immediately (regression check).
  */
-import { readFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { performance } from "node:perf_hooks";
+import { config } from "../src/config.js";
 import { pool } from "../src/db/pool.js";
 import { retrieveContext, retrieveRelevantChunks } from "../src/rag/retrieve.js";
+import { rewriteQuestion } from "../src/rag/rewrite.js";
+import type { HistoryMessage } from "../src/rag/rewrite.js";
+
+type QuestionType = "exact_term" | "paraphrase" | "multi_page" | "follow_up" | "negative";
 
 interface EvalQuestion {
   id: string;
+  type: QuestionType;
   filename: string;
   mode: "focused" | "multi_part" | "broad";
   question: string;
   expectedPages: number[];
+  history?: HistoryMessage[];
 }
+
+interface Row {
+  id: string;
+  type: QuestionType;
+  /** 1-based rank of the first chunk on an expected page; 0 = not in top `limit`. */
+  rank: number;
+  /** Distance of that chunk (positives) or of the best chunk (negatives). */
+  distance: number | null;
+  /** Distance of the best chunk on a wrong page. */
+  wrongDistance: number | null;
+  /** Expected page present in the context the model would really get. */
+  inContext: boolean;
+  /** Rank after the follow-up was rewritten (follow_up only). */
+  rewriteRank?: number;
+  rewritten?: string;
+  pages: string;
+  ms: number;
+}
+
+const RESULTS_DIR = "eval/results";
+/** Search without the production threshold so every distance can be seen. */
+const NO_THRESHOLD = 2;
 
 const args = process.argv.slice(2);
 const flag = (name: string): string | undefined => {
@@ -29,31 +67,33 @@ const flag = (name: string): string | undefined => {
 
 const limit = Number(flag("limit") ?? 10);
 const only = flag("only");
+const useRewrite = !args.includes("--no-rewrite");
+const save = !args.includes("--no-save");
+const threshold = config.rag.maxCosineDistance;
 
 const questions = (
   JSON.parse(await readFile("eval/questions.json", "utf-8")) as EvalQuestion[]
 ).filter((q) => !only || q.id.includes(only));
 
-const rows: Record<string, string | number>[] = [];
-let hit1 = 0;
-let hit2 = 0;
-let oldCover = 0;
-let newCover = 0;
-let contextChunks = 0;
-let scored = 0;
-let hit3 = 0;
-let hit5 = 0;
-let reciprocalRankSum = 0;
-let totalMs = 0;
-
-for (const q of questions) {
+async function findDocument(filename: string) {
   const found = await pool.query<{ id: number; user_id: number }>(
     `SELECT id, user_id FROM documents
      WHERE filename = $1 AND status = 'completed'
      ORDER BY id DESC LIMIT 1`,
-    [q.filename],
+    [filename],
   );
-  const document = found.rows[0];
+  return found.rows[0];
+}
+
+/** 1-based rank of the first chunk on an expected page, 0 if none. */
+function rankOf(pages: (number | null)[], expected: number[]): number {
+  return pages.findIndex((page) => page !== null && expected.includes(page)) + 1;
+}
+
+const rows: Row[] = [];
+
+for (const q of questions) {
+  const document = await findDocument(q.filename);
 
   if (!document) {
     console.warn(`Skipping ${q.id}: no completed document named ${q.filename}`);
@@ -66,57 +106,248 @@ for (const q of questions) {
     q.question,
     limit,
     document.id,
+    NO_THRESHOLD,
   );
   const ms = performance.now() - start;
-  totalMs += ms;
 
-  const rank =
-    chunks.findIndex((c) => c.pageNumber !== null && q.expectedPages.includes(c.pageNumber)) + 1;
+  const pages = chunks.map((chunk) => chunk.pageNumber);
+  const distances = chunks.map((chunk) => Number(chunk.distance));
+  const rank = rankOf(pages, q.expectedPages);
+  const wrongIndex = pages.findIndex(
+    (page) => page === null || !q.expectedPages.includes(page),
+  );
 
-  if (rank === 1) hit1++;
-  if (rank >= 1 && rank <= 2) hit2++;
-  if (rank >= 1 && rank <= 3) hit3++;
-  if (rank >= 1 && rank <= 5) hit5++;
-  if (rank > 0) reciprocalRankSum += 1 / rank;
+  // Like production: follow-ups are rewritten before the context is built.
+  const rewritten =
+    q.type === "follow_up" && useRewrite && q.history
+      ? await rewriteQuestion(q.question, q.history)
+      : undefined;
 
-  // Context coverage: is an answer page inside what the model would actually see?
-  const OLD_LIMIT = { focused: 2, multi_part: 4, broad: 4 } as const;
   const mode = q.mode === "broad" ? "multi_part" : q.mode;
-  const covers = (pages: (number | null)[]) =>
-    pages.some((p) => p !== null && q.expectedPages.includes(p));
-  const oldHit = covers(chunks.slice(0, OLD_LIMIT[q.mode]).map((c) => c.pageNumber));
-  const context = await retrieveContext(document.user_id, q.question, mode, document.id);
-  const newHit = covers(context.map((c) => c.pageNumber));
-  scored++;
-  if (oldHit) oldCover++;
-  if (newHit) newCover++;
-  contextChunks += context.length;
+  const context = await retrieveContext(
+    document.user_id,
+    rewritten ?? q.question,
+    mode,
+    document.id,
+  );
 
-  rows.push({
+  const row: Row = {
     id: q.id,
-    mode: q.mode,
-    expected: q.expectedPages.join(","),
-    rank: rank || "MISS",
-    old: oldHit ? "yes" : "NO",
-    new: newHit ? "yes" : "NO",
-    retrieved: chunks.length,
-    pages: chunks.slice(0, 5).map((c) => c.pageNumber).join(","),
+    type: q.type,
+    rank,
+    distance:
+      q.type === "negative" ? (distances[0] ?? null) : rank > 0 ? distances[rank - 1]! : null,
+    wrongDistance: wrongIndex >= 0 ? distances[wrongIndex]! : null,
+    inContext: rankOf(context.map((chunk) => chunk.pageNumber), q.expectedPages) > 0,
+    pages: pages.slice(0, 5).join(","),
     ms: Math.round(ms),
+  };
+
+  if (rewritten !== undefined) {
+    const rewrittenChunks = await retrieveRelevantChunks(
+      document.user_id,
+      rewritten,
+      limit,
+      document.id,
+      NO_THRESHOLD,
+    );
+    row.rewritten = rewritten;
+    row.rewriteRank = rankOf(
+      rewrittenChunks.map((chunk) => chunk.pageNumber),
+      q.expectedPages,
+    );
+  }
+
+  rows.push(row);
+}
+
+// --- Per-question table -------------------------------------------------------
+
+const fmt = (value: number | null) => (value === null ? "-" : value.toFixed(3));
+
+console.table(
+  rows.map((row) => ({
+    id: row.id,
+    type: row.type,
+    rank: row.type === "negative" ? "" : row.rank || "MISS",
+    dist: fmt(row.distance),
+    wrong: fmt(row.wrongDistance),
+    context: row.type === "negative" ? "" : row.inContext ? "yes" : "NO",
+    rewrite: row.rewriteRank === undefined ? "" : row.rewriteRank || "MISS",
+    pages: row.pages,
+    ms: row.ms,
+  })),
+);
+
+for (const row of rows.filter((r) => r.rewritten)) {
+  console.log(`rewrite ${row.id}: ${row.rewritten}`);
+}
+
+// --- Metrics --------------------------------------------------------------------
+
+interface Metrics {
+  n: number;
+  hit1: number;
+  hit3: number;
+  hit5: number;
+  mrr: number;
+  context: number;
+}
+
+function metrics(group: Row[]): Metrics {
+  const n = group.length;
+  const share = (test: (row: Row) => boolean) =>
+    n === 0 ? 0 : group.filter(test).length / n;
+
+  return {
+    n,
+    hit1: share((row) => row.rank === 1),
+    hit3: share((row) => row.rank >= 1 && row.rank <= 3),
+    hit5: share((row) => row.rank >= 1 && row.rank <= 5),
+    mrr: n === 0 ? 0 : group.reduce((sum, row) => sum + (row.rank ? 1 / row.rank : 0), 0) / n,
+    context: share((row) => row.inContext),
+  };
+}
+
+const pct = (value: number) => `${(value * 100).toFixed(0)}%`;
+const positives = rows.filter((row) => row.type !== "negative");
+const negatives = rows.filter((row) => row.type === "negative");
+const types = [...new Set(positives.map((row) => row.type))];
+
+const byType: Record<string, Metrics> = { all: metrics(positives) };
+for (const type of types) byType[type] = metrics(positives.filter((r) => r.type === type));
+
+console.log("\nRetrieval (answerable questions):");
+console.table(
+  Object.fromEntries(
+    Object.entries(byType).map(([type, m]) => [
+      type,
+      {
+        n: m.n,
+        "hit@1": pct(m.hit1),
+        "hit@3": pct(m.hit3),
+        "hit@5": pct(m.hit5),
+        MRR: m.mrr.toFixed(3),
+        "in context": pct(m.context),
+      },
+    ]),
+  ),
+);
+
+// Negatives: with the production threshold, would the bot still find "something"?
+const falsePositives = negatives.filter(
+  (row) => row.distance !== null && row.distance <= threshold,
+).length;
+console.log(
+  `Negatives: ${falsePositives}/${negatives.length} still retrieve chunks under the ` +
+    `threshold ${threshold} (the model must then refuse on its own).`,
+);
+
+const followUps = rows.filter((row) => row.rewriteRank !== undefined);
+if (followUps.length > 0) {
+  const found = (ranks: number[]) => ranks.filter((rank) => rank >= 1 && rank <= 3).length;
+  console.log(
+    `Follow-ups hit@3: original ${found(followUps.map((r) => r.rank))}/${followUps.length}, ` +
+      `rewritten ${found(followUps.map((r) => r.rewriteRank!))}/${followUps.length}`,
+  );
+}
+
+// --- Threshold calibration ------------------------------------------------------
+// A threshold is good when correct chunks are under it and negatives are above it.
+
+const correct = positives.map((row) => row.distance ?? Infinity);
+const negativeBest = negatives.map((row) => row.distance ?? Infinity);
+const calibration: { threshold: number; keepsCorrect: number; rejectsNegatives: number }[] = [];
+
+for (let t = 0.3; t <= 0.701; t += 0.05) {
+  calibration.push({
+    threshold: Number(t.toFixed(2)),
+    keepsCorrect: correct.filter((d) => d <= t).length / Math.max(correct.length, 1),
+    rejectsNegatives:
+      negativeBest.filter((d) => d > t).length / Math.max(negativeBest.length, 1),
   });
 }
 
-console.table(rows);
-
-const n = rows.length;
-const pct = (value: number) => `${((value / n) * 100).toFixed(0)}%`;
+const finite = (values: number[]) => values.filter(Number.isFinite).sort((a, b) => a - b);
+const range = (values: number[]) => {
+  const sorted = finite(values);
+  return sorted.length === 0
+    ? "-"
+    : `${sorted[0]!.toFixed(3)} .. ${sorted[sorted.length - 1]!.toFixed(3)}`;
+};
 
 console.log(
-  `context coverage: old(top-${"2/4"}, no neighbours)=${pct(oldCover)}  new=${pct(newCover)}  ` +
-    `avgContextChunks=${(contextChunks / Math.max(scored, 1)).toFixed(1)}`,
+  `\nDistances: correct chunks ${range(correct)}, ` +
+    `best wrong chunks ${range(positives.map((r) => r.wrongDistance ?? Infinity))}, ` +
+    `negatives' best chunk ${range(negativeBest)}`,
 );
-console.log(
-  `questions=${n}  hit@1=${pct(hit1)}  hit@2=${pct(hit2)}  hit@3=${pct(hit3)}  hit@5=${pct(hit5)}  ` +
-    `MRR=${(reciprocalRankSum / n).toFixed(3)}  avgMs=${Math.round(totalMs / n)}  limit=${limit}`,
+console.table(
+  calibration.map((c) => ({
+    threshold: c.threshold,
+    "keeps correct": pct(c.keepsCorrect),
+    "rejects negatives": pct(c.rejectsNegatives),
+    current: c.threshold === threshold ? "<-" : "",
+  })),
 );
+
+// --- Save and compare with the previous run -------------------------------------
+
+async function previousResult(): Promise<{ file: string; rows: Row[] } | null> {
+  try {
+    const files = (await readdir(RESULTS_DIR)).filter((f) => f.startsWith("retrieval-")).sort();
+    const file = files.at(-1);
+    if (!file) return null;
+    const data = JSON.parse(await readFile(`${RESULTS_DIR}/${file}`, "utf-8")) as { rows: Row[] };
+    return { file, rows: data.rows };
+  } catch {
+    return null;
+  }
+}
+
+const previous = await previousResult();
+
+if (previous) {
+  const before = new Map(previous.rows.map((row) => [row.id, row]));
+  const changes: string[] = [];
+  const score = (rank: number) => (rank === 0 ? Infinity : rank);
+
+  for (const row of positives) {
+    const old = before.get(row.id);
+    if (!old || old.rank === row.rank) continue;
+    const better = score(row.rank) < score(old.rank);
+    changes.push(
+      `${better ? "better" : "WORSE "} ${row.id}: rank ${old.rank || "MISS"} -> ${row.rank || "MISS"}`,
+    );
+  }
+
+  console.log(`\nCompared with ${previous.file}:`);
+  console.log(changes.length > 0 ? changes.join("\n") : "no rank changes");
+}
+
+if (save) {
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  await mkdir(RESULTS_DIR, { recursive: true });
+  await writeFile(
+    `${RESULTS_DIR}/retrieval-${stamp}.json`,
+    JSON.stringify(
+      {
+        date: new Date().toISOString(),
+        settings: {
+          limit,
+          threshold,
+          retrievalLimits: config.rag.retrievalLimits,
+          maxContextChunks: config.rag.maxContextChunks,
+          chunkSize: config.rag.chunkSize,
+        },
+        metrics: byType,
+        falsePositives,
+        rows,
+      },
+      null,
+      2,
+    ),
+  );
+  console.log(`\nSaved ${RESULTS_DIR}/retrieval-${stamp}.json`);
+}
 
 await pool.end();

@@ -52,11 +52,12 @@ async function answerQuestion(
     return askAI(history, signal);
   }
 
-  const classification = await routeMessage(text, documentNames, history);
+  // The current message is already saved, so it is the last history entry.
+  const previous = history.slice(0, -1);
+  const classification = await routeMessage(text, documentNames, previous);
 
   if (classification.route === "document") {
-    // The current message is already saved, so it is the last history entry.
-    const question = await rewriteQuestion(text, history.slice(0, -1), signal);
+    const question = await rewriteQuestion(text, previous, signal);
 
     return answerFromDocuments(
       userId,
