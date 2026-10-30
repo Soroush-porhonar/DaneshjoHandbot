@@ -6,6 +6,7 @@
  *   npm run eval -- --only lisbon         # questions whose id contains "lisbon"
  *   npm run eval -- --no-rewrite          # skip LLM rewriting of follow-ups
  *   npm run eval -- --no-save             # don't write eval/results/*.json
+ *   npm run eval -- --doc "x.pdf=12"      # pin a document version (before/after)
  *
  * Question types (eval/questions.json):
  *   exact_term  - uses the same words as the slide (names, formulas, acronyms)
@@ -75,6 +76,16 @@ const useRewrite = !args.includes("--no-rewrite");
 const save = !args.includes("--no-save");
 const threshold = config.rag.maxCosineDistance;
 
+/** --doc "name.pdf=12": use that document version instead of the newest one (before/after comparisons). */
+const pinned = new Map(
+  args
+    .flatMap((arg, i) => (args[i - 1] === "--doc" ? [arg] : []))
+    .map((pair) => {
+      const at = pair.lastIndexOf("=");
+      return [pair.slice(0, at), Number(pair.slice(at + 1))] as const;
+    }),
+);
+
 const questions = (
   JSON.parse(await readFile("eval/questions.json", "utf-8")) as EvalQuestion[]
 ).filter((q) => !only || q.id.includes(only));
@@ -83,8 +94,9 @@ async function findDocument(filename: string) {
   const found = await pool.query<{ id: number; user_id: number }>(
     `SELECT id, user_id FROM documents
      WHERE filename = $1 AND status = 'completed'
+       AND ($2::integer IS NULL OR id = $2)
      ORDER BY id DESC LIMIT 1`,
-    [filename],
+    [filename, pinned.get(filename) ?? null],
   );
   return found.rows[0];
 }

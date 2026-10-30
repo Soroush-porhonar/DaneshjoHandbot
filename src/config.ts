@@ -78,10 +78,13 @@ export const config = {
     enabled: process.env.OCR_ENABLED !== "false",
     /** Pages with fewer characters than this are treated as images. */
     minChars: 20,
-    /** Maximum pages OCR'd per document (CPU inference is slow). */
-    maxPages: 30,
+    /** Optional cap on OCR'd pages per document (OCR_MAX_PAGES); unlimited by default. */
+    maxPages: process.env.OCR_MAX_PAGES ? Number(process.env.OCR_MAX_PAGES) : Infinity,
+    /** Measured on the GPU (RX 6800S): ~44 s per page; used for the time estimate. */
+    secondsPerPage: 45,
     imageWidth: 1000,
     timeoutMs: 300_000,
+    /** Progress every 5 pages, or every ~10% for big documents. */
     progressEvery: 5,
   },
 

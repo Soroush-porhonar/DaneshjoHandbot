@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   assessPage,
   hasReversedLines,
+  hasReversedWords,
   isDegenerateOcr,
   normalizeText,
   reverseLineWords,
+  reverseWordLetters,
 } from "../src/rag/textQuality.js";
 
 describe("normalizeText", () => {
@@ -76,6 +78,29 @@ describe("isDegenerateOcr", () => {
 
   it("accepts normal multi-line output", () => {
     expect(isDegenerateOcr("line one\nline two\nline three")).toBe(false);
+  });
+});
+
+describe("reversed letters in OCR output", () => {
+  // Real output of the vision model for page 5 of the testing notes.
+  const ocr =
+    "تراهم یاه ینفریغ:\n" +
+    "تراهم یاه ریز یارب لیدبت ندش هب کی رتست مرن رازفا بوخ یروض تسا .یارب نییعت هکنیا ایآ تست";
+  const lisbon =
+    "در تاریخ اروپا بعضی حوادث فقط به دلیل تعداد قربانیان یا میزان ویرانی اهمیت پیدا نمی کنند، " +
+    "بلکه به این دلیل مهم می شوند که نگاه مردم به جهان را تغییر می دهند. این زلزله در اول نوامبر رخ داد.";
+
+  it("detects words written with reversed letters", () => {
+    expect(hasReversedWords(ocr)).toBe(true);
+  });
+
+  it("leaves correct Persian alone", () => {
+    expect(hasReversedWords(lisbon)).toBe(false);
+  });
+
+  it("restores the letters of every Persian word and keeps English and digits", () => {
+    expect(reverseWordLetters("تراهم یاه ینفریغ:")).toBe("مهارت های غیرفنی:");
+    expect(reverseWordLetters("ار Test Case اه ۱۲")).toBe("را Test Case ها ۱۲");
   });
 });
 

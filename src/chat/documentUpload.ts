@@ -58,7 +58,11 @@ export async function handleDocument(
         await sendMessage(
           chatId,
           ocrDone === 0
-            ? ocrStartedText(ocrTotal, skipped)
+            ? ocrStartedText(
+                ocrTotal,
+                skipped,
+                Math.max(1, Math.round((ocrTotal * config.ocr.secondsPerPage) / 60)),
+              )
             : ocrProgressText(ocrDone, ocrTotal),
         );
       },

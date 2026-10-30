@@ -3,7 +3,13 @@ import { chat } from "../llm/ollamaClient.js";
 import { OCR_PROMPT } from "../llm/prompts/ocr.js";
 import { logger } from "../logger.js";
 import type { PageText, PdfHandle } from "./pdf.js";
-import { assessPage, isDegenerateOcr, normalizeText } from "./textQuality.js";
+import {
+  assessPage,
+  hasReversedWords,
+  isDegenerateOcr,
+  normalizeText,
+  reverseWordLetters,
+} from "./textQuality.js";
 
 export interface ExtractionProgress {
   /** Pages that will be read with the vision model. */
@@ -45,7 +51,14 @@ export async function ocrPage(
     return "";
   }
 
-  return normalizeText(text);
+  const normalized = normalizeText(text);
+
+  if (hasReversedWords(normalized)) {
+    logger.info(`[OCR] Page ${pageNumber}: Persian words came out reversed, fixing`);
+    return reverseWordLetters(normalized);
+  }
+
+  return normalized;
 }
 
 /**
@@ -80,6 +93,8 @@ export async function extractPages(
   );
   await onProgress?.({ ...progress });
 
+  // Every 5 pages for small jobs, about every 10% for big ones.
+  const reportEvery = Math.max(config.ocr.progressEvery, Math.ceil(toOcr.length / 10));
   const ocrByPage = new Map<number, string>();
 
   for (const page of toOcr) {
@@ -94,7 +109,7 @@ export async function extractPages(
 
     if (text) ocrByPage.set(page.pageNumber, text);
 
-    if (progress.ocrDone % config.ocr.progressEvery === 0) {
+    if (progress.ocrDone % reportEvery === 0) {
       await onProgress?.({ ...progress });
     }
   }

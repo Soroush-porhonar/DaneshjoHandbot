@@ -113,6 +113,36 @@ export function reverseLineWords(text: string): string {
     .join("\n");
 }
 
+/** Very common Persian words; their reversed spellings are almost never real words. */
+const COMMON_WORDS = ["از", "در", "که", "را", "این", "است", "برای", "های", "به", "با", "می", "یک"];
+const REVERSED_WORDS = new Set(COMMON_WORDS.map((word) => [...word].reverse().join("")));
+const NORMAL_WORDS = new Set(COMMON_WORDS);
+
+/** A run of Persian/Arabic letters (not digits or punctuation); ZWNJ stays inside words. */
+const PERSIAN_LETTERS = /[ء-يٱ-ۓە‌]+/g;
+
+/**
+ * The vision model sometimes writes every Persian word with its letters in
+ * reverse ("تراهم یاه" for "مهارت های") while English stays correct. True when
+ * reversed spellings of common words clearly outnumber the normal ones.
+ */
+export function hasReversedWords(text: string): boolean {
+  let normal = 0;
+  let reversed = 0;
+
+  for (const token of text.split(/[\s.,:;!?؟،؛()«»"]+/)) {
+    if (NORMAL_WORDS.has(token)) normal++;
+    else if (REVERSED_WORDS.has(token)) reversed++;
+  }
+
+  return reversed >= 3 && reversed > 2 * normal;
+}
+
+/** Reverses the letters inside every Persian word; English, digits and punctuation are untouched. */
+export function reverseWordLetters(text: string): string {
+  return text.replace(PERSIAN_LETTERS, (word) => [...word].reverse().join(""));
+}
+
 /** True for model output that is empty or stuck in a loop (same line repeated). */
 export function isDegenerateOcr(text: string): boolean {
   const lines = text

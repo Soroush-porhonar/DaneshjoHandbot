@@ -609,5 +609,77 @@
     "question": "الگوی طراحی Singleton چگونه پیاده‌سازی می‌شود؟",
     "expectedPages": [],
     "filename": "جزوه مهندسی نرم افزار - بخش شی گرایی.pdf"
+  },
+  {
+    "id": "sw-ocr-nontech-skills",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "یک تستر نرم‌افزار خوب چه مهارت‌های غیرفنی‌ای باید داشته باشد؟",
+    "expectedPages": [5],
+    "mustInclude": ["تحلیلی"],
+    "filename": "جزوه درس آزمون نرم افزاراستاد زاغری 405.pdf"
+  },
+  {
+    "id": "sw-ocr-pom",
+    "type": "exact_term",
+    "mode": "focused",
+    "question": "مزایا و معایب ساختار Page Object Model چیست؟",
+    "expectedPages": [25],
+    "mustInclude": ["انعطاف"],
+    "filename": "جزوه درس آزمون نرم افزاراستاد زاغری 405.pdf"
+  },
+  {
+    "id": "sw-ocr-stlc",
+    "type": "exact_term",
+    "mode": "focused",
+    "question": "مراحل STLC یا چرخه عمر تست نرم‌افزار کدامند؟",
+    "expectedPages": [30],
+    "mustInclude": ["Requirement Analysis"],
+    "filename": "جزوه درس آزمون نرم افزاراستاد زاغری 405.pdf"
+  },
+  {
+    "id": "sw-ocr-monitoring",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "چطور بفهمیم کار تست طبق برنامه پیش می‌رود و اگر عقب بودیم چه کنیم؟",
+    "expectedPages": [41],
+    "mustInclude": ["Monitoring"],
+    "filename": "جزوه درس آزمون نرم افزاراستاد زاغری 405.pdf"
+  },
+  {
+    "id": "sw-ocr-traceability",
+    "type": "exact_term",
+    "mode": "focused",
+    "question": "ردیابی دوطرفه (Bi-Directional Traceability) در تست یعنی چه؟",
+    "expectedPages": [50],
+    "mustInclude": ["Test Condition"],
+    "filename": "جزوه درس آزمون نرم افزاراستاد زاغری 405.pdf"
+  },
+  {
+    "id": "sw-ocr-bdd",
+    "type": "exact_term",
+    "mode": "focused",
+    "question": "برای BDD از چه ابزارهایی استفاده می‌شود؟",
+    "expectedPages": [64],
+    "mustInclude": ["Cucumber"],
+    "filename": "جزوه درس آزمون نرم افزاراستاد زاغری 405.pdf"
+  },
+  {
+    "id": "sw-ocr-stub-driver",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "در تست یکپارچه‌سازی وقتی یک ماژول هنوز آماده نیست چه کار می‌کنیم؟",
+    "expectedPages": [80, 81],
+    "mustInclude": ["Stub"],
+    "filename": "جزوه درس آزمون نرم افزاراستاد زاغری 405.pdf"
+  },
+  {
+    "id": "sw-ocr-decision-table-rows",
+    "type": "exact_term",
+    "mode": "focused",
+    "question": "سطرها و ستون‌های جدول تصمیم نشان‌دهنده چه چیزی هستند؟",
+    "expectedPages": [110, 130],
+    "mustInclude": ["قانون"],
+    "filename": "جزوه درس آزمون نرم افزاراستاد زاغری 405.pdf"
   }
 ]
