@@ -56,9 +56,10 @@ describe("user-facing messages", () => {
     },
   );
 
-  it("advertises commands in the form the bot actually parses", () => {
-    expect(messages.HELP_TEXT).toContain("/select 1");
-    expect(messages.HELP_TEXT).toContain("/delete 1");
+  it("shows typed commands in the form the bot actually parses", () => {
+    // Help no longer lists commands (buttons do the work); the usage hints still show them.
+    expect(messages.SELECT_USAGE_TEXT).toContain("/select 1");
+    expect(messages.DELETE_USAGE_TEXT).toContain("/delete 1");
   });
 
   it("the documents list only explains the active document; the buttons show the documents", () => {
