@@ -61,6 +61,18 @@ describe("answerFromDocuments", () => {
     expect(retrieveContext).toHaveBeenCalledWith(8, "سؤال من", "focused", 1);
   });
 
+  it("puts the student's question after the sources, so exercise questions in notes aren't answered instead", async () => {
+    vi.mocked(retrieveContext).mockResolvedValue([
+      { ...chunk(0, 151), content: "خلاصه فصل\nتست پویا را کامل توضیح دهید ؟" },
+    ]);
+
+    await answerFromDocuments(8, "رسمی‌ترین نوع بازبینی کدام است؟", "focused");
+
+    const text = prompt(0);
+    expect(text.trim().endsWith("رسمی‌ترین نوع بازبینی کدام است؟")).toBe(true);
+    expect(text.indexOf("تست پویا را کامل")).toBeLessThan(text.indexOf("رسمی‌ترین نوع بازبینی"));
+  });
+
   it("uses low temperature for factual answers", async () => {
     vi.mocked(retrieveContext).mockResolvedValue([chunk(0, 1)]);
 

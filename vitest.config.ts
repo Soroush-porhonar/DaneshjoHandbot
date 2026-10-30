@@ -17,6 +17,8 @@ export default defineConfig({
       LLM_URL: "http://localhost:11434/api/chat",
       LLM_MODEL: "test-model",
       EMBEDDING_MODEL: "test-embed",
+      // Unit tests never call the real reranker service.
+      RERANKER_ENABLED: "false",
     },
   },
 });

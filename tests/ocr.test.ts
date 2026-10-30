@@ -3,7 +3,14 @@ import type { PageText, PdfHandle } from "../src/rag/pdf.js";
 
 // The vision model is replaced by a fake that "reads" a page image.
 vi.mock("../src/llm/ollamaClient.js", () => ({ chat: vi.fn() }));
+// A copy of the OCR settings that tests may change (e.g. set a page cap).
+vi.mock("../src/config.js", async (importOriginal) => {
+  const { config } = await importOriginal<typeof import("../src/config.js")>();
+  return { config: { ...config, ocr: { ...config.ocr } } };
+});
 
+const { config } = await import("../src/config.js");
+const ocrSettings = config.ocr as { maxPages: number };
 const { extractPages } = await import("../src/rag/ocr.js");
 const { chat } = await import("../src/llm/ollamaClient.js");
 const { logger } = await import("../src/logger.js");
@@ -27,6 +34,7 @@ function fakePdf(pages: PageText[]): PdfHandle {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  ocrSettings.maxPages = Infinity;
   vi.spyOn(logger, "info").mockImplementation(() => {});
   vi.spyOn(logger, "warn").mockImplementation(() => {});
   vi.mocked(chat).mockImplementation(async () => "متن خوانده‌شده از تصویر صفحه");
@@ -73,7 +81,17 @@ describe("extractPages", () => {
     expect(result.pages[0]!.method).toBe("text");
   });
 
-  it("stops at the page cap and reports skipped pages", async () => {
+  it("reads every poor page when no cap is set", async () => {
+    const pages = Array.from({ length: 35 }, (_, i) => imagePage(i + 1));
+
+    const result = await extractPages(fakePdf(pages));
+
+    expect(chat).toHaveBeenCalledTimes(35);
+    expect(result.ocrPages).toBe(35);
+  });
+
+  it("stops at a configured page cap and reports skipped pages", async () => {
+    ocrSettings.maxPages = 30;
     const pages = Array.from({ length: 35 }, (_, i) => imagePage(i + 1));
     const progress = vi.fn();
 
@@ -82,6 +100,17 @@ describe("extractPages", () => {
     expect(chat).toHaveBeenCalledTimes(30);
     expect(result.ocrPages).toBe(30);
     expect(progress).toHaveBeenNthCalledWith(1, { ocrTotal: 30, ocrDone: 0, skipped: 5 });
+  });
+
+  it("reports about every 10% for big documents", async () => {
+    const pages = Array.from({ length: 100 }, (_, i) => imagePage(i + 1));
+    const progress = vi.fn();
+
+    await extractPages(fakePdf(pages), progress);
+
+    expect(progress.mock.calls.map(([p]) => p.ocrDone)).toEqual([
+      0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100,
+    ]);
   });
 
   it("reports progress every 5 pages", async () => {

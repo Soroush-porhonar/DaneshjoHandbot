@@ -31,7 +31,7 @@ const { deleteDocument, findDocumentFilename, listCompletedFilenames } = await i
   "../../src/db/documents.js"
 );
 const { isUpdateProcessed, markUpdateProcessed } = await import("../../src/db/updates.js");
-const { getDocumentChunks, retrieveContext, retrieveRelevantChunks } = await import(
+const { getDocumentChunks, retrieveContext, retrieveRelevantChunks, searchCandidates } = await import(
   "../../src/rag/retrieve.js"
 );
 const { ingestPdf } = await import("../../src/rag/ingest.js");
@@ -158,7 +158,7 @@ describe("retrieval", () => {
 
     const hits = await retrieveRelevantChunks(alice, "#1", 10, documentId);
 
-    // Chunks 0 and 2 match exactly; chunk 1 (distance 1) is over 0.55.
+    // Chunks 0 and 2 match exactly; chunk 1 (distance 1) is over the cutoff.
     expect(hits.map((hit) => hit.chunkIndex).sort()).toEqual([0, 2]);
     expect(hits.every((hit) => Number(hit.distance) < 0.01)).toBe(true);
   });
@@ -181,6 +181,52 @@ describe("retrieval", () => {
 
     expect(context.map((chunk) => chunk.chunkIndex)).toEqual([1, 2, 3]);
     expect(context.map((chunk) => chunk.isHit)).toEqual([false, true, false]);
+  });
+
+  it("adds the whole section of a slide hit (same title), within the cap", async () => {
+    const alice = await addUser("alice");
+    const documentId = await addDocument(alice, "slides.pdf", [5, 6, 1, 7, 8, 9]);
+    // Slides 1-4 share one title (section 0); 0 and 5 are other sections.
+    await pool.query(
+      `UPDATE document_chunks SET section_index =
+         CASE WHEN chunk_index BETWEEN 1 AND 4 THEN 0 ELSE chunk_index + 10 END
+       WHERE document_id = $1`,
+      [documentId],
+    );
+
+    const context = await retrieveContext(alice, "#1", "focused", documentId);
+
+    // Hit 2, its neighbours 1 and 3, and the rest of its section (4); not other sections.
+    expect(context.map((chunk) => chunk.chunkIndex)).toEqual([1, 2, 3, 4]);
+  });
+
+  it("hybrid search finds an exact term that vector search misses", async () => {
+    const alice = await addUser("alice");
+    const documentId = await addDocument(alice, "a.pdf", [5, 6, 7]);
+    // Chunk 2 mentions the term; its vector is far from the question's (#1).
+    await pool.query(
+      `UPDATE document_chunks SET content = 'استاندارد ISO 29119 برای فرایند تست'
+       WHERE document_id = $1 AND chunk_index = 2`,
+      [documentId],
+    );
+
+    const vectorOnly = await retrieveRelevantChunks(alice, "#1 29119", 10, documentId);
+    const hybrid = await searchCandidates(alice, "#1 29119", 10, documentId);
+
+    expect(vectorOnly).toEqual([]);
+    expect(hybrid.map((chunk) => chunk.chunkIndex)).toEqual([2]);
+  });
+
+  it("keyword search respects user isolation", async () => {
+    const alice = await addUser("alice");
+    const bob = await addUser("bob");
+    const bobsDocument = await addDocument(bob, "bob.pdf", [5]);
+    await pool.query(
+      `UPDATE document_chunks SET content = 'استاندارد 29119' WHERE document_id = $1`,
+      [bobsDocument],
+    );
+
+    await expect(searchCandidates(alice, "#1 29119", 10)).resolves.toEqual([]);
   });
 
   it("returns no context when nothing is close enough", async () => {
@@ -214,6 +260,15 @@ describe("ingestPdf", () => {
 
     const hits = await retrieveRelevantChunks(alice, "#2", 10);
     expect(hits.map((hit) => hit.pageNumber)).toEqual([2]);
+
+    const stored = await pool.query(
+      `SELECT page_number, page_end, section_title, section_index
+       FROM document_chunks ORDER BY chunk_index`,
+    );
+    expect(stored.rows).toEqual([
+      { page_number: 1, page_end: 1, section_title: page(1, "#1").text, section_index: 0 },
+      { page_number: 2, page_end: 2, section_title: page(2, "#2").text, section_index: 1 },
+    ]);
   });
 
   it("marks the document failed and stores nothing when embedding fails", async () => {

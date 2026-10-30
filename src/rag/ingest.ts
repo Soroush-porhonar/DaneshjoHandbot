@@ -1,6 +1,7 @@
 import { pool } from "../db/pool.js";
 import { openPdf } from "./pdf.js";
-import { chunkPages } from "./chunk.js";
+import type { TextChunk } from "./chunk.js";
+import { chunkDocument } from "./semanticChunk.js";
 import { extractPages } from "./ocr.js";
 import type { ExtractionProgress } from "./ocr.js";
 import { generateEmbeddings } from "./embeddings.js";
@@ -49,35 +50,23 @@ export async function ingestPdf(
       await pdf.close();
     }
 
-    const chunks = chunkPages(extraction.pages);
+    const chunks = await chunkDocument(extraction.pages);
 
     if (chunks.length === 0) {
       throw new PdfExtractError("The PDF contains no usable text");
     }
 
     // Generate embeddings before opening the transaction.
-    const embeddedChunks: {
-      chunkIndex: number;
-      pageNumber: number;
-      content: string;
-      method: "text" | "ocr";
-      embedding: number[];
-    }[] = [];
+    const embeddedChunks: (TextChunk & { embedding: number[] })[] = [];
 
     for (let start = 0; start < chunks.length; start += EMBED_BATCH_SIZE) {
       const batch = chunks.slice(start, start + EMBED_BATCH_SIZE);
       const embeddings = await generateEmbeddings(
-        batch.map((chunk) => chunk.content),
+        batch.map((chunk) => chunk.embedText),
       );
 
       batch.forEach((chunk, index) => {
-        embeddedChunks.push({
-          chunkIndex: chunk.chunkIndex,
-          pageNumber: chunk.pageNumber,
-          content: chunk.content,
-          method: chunk.method,
-          embedding: embeddings[index]!,
-        });
+        embeddedChunks.push({ ...chunk, embedding: embeddings[index]! });
       });
     }
 
@@ -92,15 +81,19 @@ export async function ingestPdf(
 
         await client.query(
           `INSERT INTO document_chunks
-     (document_id, chunk_index, page_number, content, embedding, extraction_method)
-   VALUES ($1, $2, $3, $4, $5::vector, $6)`,
+     (document_id, chunk_index, page_number, page_end, content, embedding,
+      extraction_method, section_title, section_index)
+   VALUES ($1, $2, $3, $4, $5, $6::vector, $7, $8, $9)`,
           [
             documentId,
             chunk.chunkIndex,
             chunk.pageNumber,
+            chunk.pageEnd,
             chunk.content,
             vector,
             chunk.method,
+            chunk.sectionTitle,
+            chunk.sectionIndex,
           ],
         );
       }

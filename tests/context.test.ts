@@ -36,6 +36,29 @@ describe("mergeContext", () => {
     expect(indexes(merged)).toEqual([10, 29, 30, 31]);
   });
 
+  it("adds the hit's section, closest slides first", () => {
+    const inSection = (chunkIndex: number) => ({ ...chunk(chunkIndex), sectionIndex: 4 });
+    const hit = inSection(12);
+
+    const merged = mergeContext(
+      [hit],
+      [inSection(10), inSection(11), inSection(13), inSection(16), chunk(5)],
+      4,
+    );
+
+    expect(indexes(merged)).toEqual([11, 12, 13, 10].sort((a, b) => a - b));
+  });
+
+  it("serves the best hit's section before a weaker hit's neighbours", () => {
+    const merged = mergeContext(
+      [{ ...chunk(20), sectionIndex: 1 }, chunk(40)],
+      [chunk(41), { ...chunk(22), sectionIndex: 1 }, { ...chunk(23), sectionIndex: 1 }],
+      4,
+    );
+
+    expect(indexes(merged)).toEqual([20, 22, 23, 40]);
+  });
+
   it("handles no neighbours", () => {
     expect(indexes(mergeContext([chunk(3), chunk(1)], [], 5))).toEqual([1, 3]);
   });

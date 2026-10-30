@@ -13,8 +13,8 @@ function allMessages(): [string, string][] {
       samples.push([`${name}(none selected)`, messages.documentsListText([{ id: 3, filename: "جزوه.pdf", status: "failed" }], null)]);
     } else if (typeof value === "function") {
       const fn = value as (...args: unknown[]) => string;
-      samples.push([name, fn("جزوه.pdf", 2)]);
-      samples.push([`${name}(zero)`, fn(0, 0)]);
+      samples.push([name, fn("جزوه.pdf", 2, 3)]);
+      samples.push([`${name}(zero)`, fn(0, 0, 0)]);
     } else {
       samples.push([name, Object.values(value as Record<string, string>).join("\n")]);
     }

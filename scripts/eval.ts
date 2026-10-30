@@ -6,6 +6,7 @@
  *   npm run eval -- --only lisbon         # questions whose id contains "lisbon"
  *   npm run eval -- --no-rewrite          # skip LLM rewriting of follow-ups
  *   npm run eval -- --no-save             # don't write eval/results/*.json
+ *   npm run eval -- --doc "x.pdf=12"      # pin a document version (before/after)
  *
  * Question types (eval/questions.json):
  *   exact_term  - uses the same words as the slide (names, formulas, acronyms)
@@ -21,7 +22,8 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { performance } from "node:perf_hooks";
 import { config } from "../src/config.js";
 import { pool } from "../src/db/pool.js";
-import { retrieveContext, retrieveRelevantChunks } from "../src/rag/retrieve.js";
+import { retrieveContext, retrieveRelevantChunks, searchCandidates } from "../src/rag/retrieve.js";
+import { rerankChunks } from "../src/rag/rerank.js";
 import { rewriteQuestion } from "../src/rag/rewrite.js";
 import type { HistoryMessage } from "../src/rag/rewrite.js";
 
@@ -40,6 +42,7 @@ interface EvalQuestion {
 interface Row {
   id: string;
   type: QuestionType;
+  filename: string;
   /** 1-based rank of the first chunk on an expected page; 0 = not in top `limit`. */
   rank: number;
   /** Distance of that chunk (positives) or of the best chunk (negatives). */
@@ -50,6 +53,10 @@ interface Row {
   inContext: boolean;
   /** Rank after the follow-up was rewritten (follow_up only). */
   rewriteRank?: number;
+  /** Rank in hybrid search (vector + keyword, RRF); equals `rank` when hybrid is off. */
+  hybridRank: number;
+  /** Rank after the reranker re-ordered the hybrid candidates (the production order). */
+  rerankRank: number;
   rewritten?: string;
   pages: string;
   ms: number;
@@ -71,6 +78,16 @@ const useRewrite = !args.includes("--no-rewrite");
 const save = !args.includes("--no-save");
 const threshold = config.rag.maxCosineDistance;
 
+/** --doc "name.pdf=12": use that document version instead of the newest one (before/after comparisons). */
+const pinned = new Map(
+  args
+    .flatMap((arg, i) => (args[i - 1] === "--doc" ? [arg] : []))
+    .map((pair) => {
+      const at = pair.lastIndexOf("=");
+      return [pair.slice(0, at), Number(pair.slice(at + 1))] as const;
+    }),
+);
+
 const questions = (
   JSON.parse(await readFile("eval/questions.json", "utf-8")) as EvalQuestion[]
 ).filter((q) => !only || q.id.includes(only));
@@ -79,16 +96,34 @@ async function findDocument(filename: string) {
   const found = await pool.query<{ id: number; user_id: number }>(
     `SELECT id, user_id FROM documents
      WHERE filename = $1 AND status = 'completed'
+       AND ($2::integer IS NULL OR id = $2)
      ORDER BY id DESC LIMIT 1`,
-    [filename],
+    [filename, pinned.get(filename) ?? null],
   );
   return found.rows[0];
 }
 
-/** 1-based rank of the first chunk on an expected page, 0 if none. */
-function rankOf(pages: (number | null)[], expected: number[]): number {
-  return pages.findIndex((page) => page !== null && expected.includes(page)) + 1;
+interface PageSpan {
+  pageNumber: number | null;
+  pageEnd?: number | null;
 }
+
+/** True when a chunk's pages (it may cross a page break) include an expected page. */
+function covers(chunk: PageSpan, expected: number[]): boolean {
+  if (chunk.pageNumber === null) return false;
+  const end = chunk.pageEnd ?? chunk.pageNumber;
+  return expected.some((page) => page >= chunk.pageNumber! && page <= end);
+}
+
+/** 1-based rank of the first chunk on an expected page, 0 if none. */
+function rankOf(chunks: PageSpan[], expected: number[]): number {
+  return chunks.findIndex((chunk) => covers(chunk, expected)) + 1;
+}
+
+const span = (chunk: PageSpan) =>
+  chunk.pageEnd && chunk.pageEnd !== chunk.pageNumber
+    ? `${chunk.pageNumber}-${chunk.pageEnd}`
+    : String(chunk.pageNumber);
 
 const rows: Row[] = [];
 
@@ -110,12 +145,13 @@ for (const q of questions) {
   );
   const ms = performance.now() - start;
 
-  const pages = chunks.map((chunk) => chunk.pageNumber);
   const distances = chunks.map((chunk) => Number(chunk.distance));
-  const rank = rankOf(pages, q.expectedPages);
-  const wrongIndex = pages.findIndex(
-    (page) => page === null || !q.expectedPages.includes(page),
-  );
+  const rank = rankOf(chunks, q.expectedPages);
+  // Hybrid search (vector + keyword, RRF), then the reranker on top, like production.
+  const hybrid = await searchCandidates(document.user_id, q.question, limit, document.id, NO_THRESHOLD);
+  const hybridRank = rankOf(hybrid, q.expectedPages);
+  const rerankRank = rankOf(await rerankChunks(q.question, hybrid), q.expectedPages);
+  const wrongIndex = chunks.findIndex((chunk) => !covers(chunk, q.expectedPages));
 
   // Like production: follow-ups are rewritten before the context is built.
   const rewritten =
@@ -134,12 +170,15 @@ for (const q of questions) {
   const row: Row = {
     id: q.id,
     type: q.type,
+    filename: q.filename,
     rank,
+    hybridRank,
+    rerankRank,
     distance:
       q.type === "negative" ? (distances[0] ?? null) : rank > 0 ? distances[rank - 1]! : null,
     wrongDistance: wrongIndex >= 0 ? distances[wrongIndex]! : null,
-    inContext: rankOf(context.map((chunk) => chunk.pageNumber), q.expectedPages) > 0,
-    pages: pages.slice(0, 5).join(","),
+    inContext: rankOf(context, q.expectedPages) > 0,
+    pages: chunks.slice(0, 5).map(span).join(","),
     ms: Math.round(ms),
   };
 
@@ -152,10 +191,7 @@ for (const q of questions) {
       NO_THRESHOLD,
     );
     row.rewritten = rewritten;
-    row.rewriteRank = rankOf(
-      rewrittenChunks.map((chunk) => chunk.pageNumber),
-      q.expectedPages,
-    );
+    row.rewriteRank = rankOf(rewrittenChunks, q.expectedPages);
   }
 
   rows.push(row);
@@ -170,6 +206,8 @@ console.table(
     id: row.id,
     type: row.type,
     rank: row.type === "negative" ? "" : row.rank || "MISS",
+    hybrid: row.type === "negative" ? "" : row.hybridRank || "MISS",
+    reranked: row.type === "negative" ? "" : row.rerankRank || "MISS",
     dist: fmt(row.distance),
     wrong: fmt(row.wrongDistance),
     context: row.type === "negative" ? "" : row.inContext ? "yes" : "NO",
@@ -191,6 +229,11 @@ interface Metrics {
   hit3: number;
   hit5: number;
   mrr: number;
+  hybridHit1: number;
+  hybridMrr: number;
+  rerankHit1: number;
+  rerankHit3: number;
+  rerankMrr: number;
   context: number;
 }
 
@@ -198,13 +241,20 @@ function metrics(group: Row[]): Metrics {
   const n = group.length;
   const share = (test: (row: Row) => boolean) =>
     n === 0 ? 0 : group.filter(test).length / n;
+  const mrr = (rankOf: (row: Row) => number) =>
+    n === 0 ? 0 : group.reduce((sum, row) => sum + (rankOf(row) ? 1 / rankOf(row) : 0), 0) / n;
 
   return {
     n,
     hit1: share((row) => row.rank === 1),
     hit3: share((row) => row.rank >= 1 && row.rank <= 3),
     hit5: share((row) => row.rank >= 1 && row.rank <= 5),
-    mrr: n === 0 ? 0 : group.reduce((sum, row) => sum + (row.rank ? 1 / row.rank : 0), 0) / n,
+    mrr: mrr((row) => row.rank),
+    hybridHit1: share((row) => row.hybridRank === 1),
+    hybridMrr: mrr((row) => row.hybridRank),
+    rerankHit1: share((row) => row.rerankRank === 1),
+    rerankHit3: share((row) => row.rerankRank >= 1 && row.rerankRank <= 3),
+    rerankMrr: mrr((row) => row.rerankRank),
     context: share((row) => row.inContext),
   };
 }
@@ -217,6 +267,11 @@ const types = [...new Set(positives.map((row) => row.type))];
 const byType: Record<string, Metrics> = { all: metrics(positives) };
 for (const type of types) byType[type] = metrics(positives.filter((r) => r.type === type));
 
+// Per document too: slide decks and plain-text notes behave differently.
+for (const filename of new Set(positives.map((row) => row.filename))) {
+  byType[`📄 ${filename.slice(0, 24)}`] = metrics(positives.filter((r) => r.filename === filename));
+}
+
 console.log("\nRetrieval (answerable questions):");
 console.table(
   Object.fromEntries(
@@ -228,6 +283,11 @@ console.table(
         "hit@3": pct(m.hit3),
         "hit@5": pct(m.hit5),
         MRR: m.mrr.toFixed(3),
+        "hybrid hit@1": pct(m.hybridHit1),
+        "hybrid MRR": m.hybridMrr.toFixed(3),
+        "+rerank hit@1": pct(m.rerankHit1),
+        "+rerank hit@3": pct(m.rerankHit3),
+        "+rerank MRR": m.rerankMrr.toFixed(3),
         "in context": pct(m.context),
       },
     ]),

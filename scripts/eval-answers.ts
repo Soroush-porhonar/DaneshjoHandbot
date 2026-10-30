@@ -5,6 +5,7 @@
  *   npm run eval:answers
  *   npm run eval:answers -- --only lisbon
  *   npm run eval:answers -- --no-judge      # skip the LLM-as-judge step
+ *   npm run eval:answers -- --doc "x.pdf=12" # pin a document version (before/after)
  *
  * Runs every question in eval/questions.json that has `mustInclude` keywords,
  * plus all `negative` questions. Checks per answer:
@@ -48,6 +49,16 @@ const onlyIndex = args.indexOf("--only");
 const only = onlyIndex >= 0 ? args[onlyIndex + 1] : undefined;
 const useJudge = !args.includes("--no-judge");
 
+/** --doc "name.pdf=12": use that document version instead of the newest one. */
+const pinned = new Map(
+  args
+    .flatMap((arg, i) => (args[i - 1] === "--doc" ? [arg] : []))
+    .map((pair) => {
+      const at = pair.lastIndexOf("=");
+      return [pair.slice(0, at), Number(pair.slice(at + 1))] as const;
+    }),
+);
+
 const questions = (
   JSON.parse(await readFile("eval/questions.json", "utf-8")) as EvalQuestion[]
 ).filter(
@@ -67,7 +78,12 @@ function comparable(text: string): string {
 
 function citedPages(answer: string): number[] {
   const sources = answer.split(SOURCES_HEADING)[1] ?? "";
-  return [...sources.matchAll(/صفحه (\d+)/g)].map((match) => Number(match[1]));
+  // "صفحه 3" or a range "صفحه 3 تا 5" (a chunk crossing pages) -> every page in it.
+  return [...sources.matchAll(/صفحه (\d+)(?: تا (\d+))?/g)].flatMap((match) => {
+    const first = Number(match[1]);
+    const last = Number(match[2] ?? match[1]);
+    return Array.from({ length: last - first + 1 }, (_, i) => first + i);
+  });
 }
 
 function persianShare(text: string): number {
@@ -115,8 +131,9 @@ async function findDocument(filename: string) {
   const found = await pool.query<{ id: number; user_id: number }>(
     `SELECT id, user_id FROM documents
      WHERE filename = $1 AND status = 'completed'
+       AND ($2::integer IS NULL OR id = $2)
      ORDER BY id DESC LIMIT 1`,
-    [filename],
+    [filename, pinned.get(filename) ?? null],
   );
   return found.rows[0];
 }

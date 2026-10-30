@@ -25,6 +25,15 @@ export const config = {
     temperature: { rag: 0.2, router: 0, chat: 0.7 },
   },
 
+  /** Cross-encoder reranker (llama.cpp server in compose.yaml, runs on the CPU). */
+  reranker: {
+    enabled: process.env.RERANKER_ENABLED !== "false",
+    url: process.env.RERANKER_URL ?? "http://localhost:8081/v1/rerank",
+    /** Search returns this many candidates; the reranker keeps the best few. */
+    candidates: 10,
+    timeoutMs: 20_000,
+  },
+
   embedding: {
     url: process.env.OLLAMA_EMBED_URL ?? "http://localhost:11434/api/embed",
     model: required("EMBEDDING_MODEL"),
@@ -35,7 +44,36 @@ export const config = {
   rag: {
     chunkSize: 1200,
     chunkOverlap: 200,
-    maxCosineDistance: 0.55,
+    /**
+     * Chunking features, switchable by env to re-measure (npm run eval).
+     * Measured on 65 questions / 6 documents: per-page chunks were best; the
+     * cross-page and semantic variants lowered hit@1 on long notes, whose
+     * pages already hold one subtopic each, so they are off by default.
+     */
+    chunking: {
+      stripBoilerplate: process.env.CHUNK_STRIP_BOILERPLATE !== "false",
+      titleInEmbedding: process.env.CHUNK_TITLE_IN_EMBEDDING !== "false",
+      crossPage: process.env.CHUNK_CROSS_PAGE === "true",
+      /** Running text: cut where the topic changes (sentence embeddings). */
+      semantic: process.env.CHUNK_SEMANTIC === "true",
+    },
+    /**
+     * Hybrid search: vector + keyword (full-text) results fused with Reciprocal Rank Fusion.
+     * Measured on 86 questions: vector search alone already has the right page in its
+     * top 10 for 82; keyword search added none (the misses are paraphrases with no
+     * shared words), and after reranking the results were identical. So it is off by default.
+     */
+    hybridSearch: process.env.HYBRID_SEARCH === "true",
+    /** RRF constant: each list adds 1 / (k + rank); 60 is the usual value. */
+    rrfK: 60,
+    /** Slide decks: give the model the hit's whole section (no measured effect at the current context cap). */
+    sectionExpansion: process.env.SECTION_EXPANSION === "true",
+    /**
+     * Chunks farther than this are ignored. Calibrated with npm run eval:
+     * 0.6 keeps 98% of correct pages (0.55 kept 93%). Unanswerable questions
+     * overlap these distances, so the grounded prompt does the refusing.
+     */
+    maxCosineDistance: 0.6,
     /** Vector hits per question mode. */
     retrievalLimits: { focused: 3, multi_part: 5 },
     /** Hits plus their neighbouring chunks may fill at most this many chunks. */
@@ -49,10 +87,13 @@ export const config = {
     enabled: process.env.OCR_ENABLED !== "false",
     /** Pages with fewer characters than this are treated as images. */
     minChars: 20,
-    /** Maximum pages OCR'd per document (CPU inference is slow). */
-    maxPages: 30,
+    /** Optional cap on OCR'd pages per document (OCR_MAX_PAGES); unlimited by default. */
+    maxPages: process.env.OCR_MAX_PAGES ? Number(process.env.OCR_MAX_PAGES) : Infinity,
+    /** Measured on the GPU (RX 6800S): ~44 s per page; used for the time estimate. */
+    secondsPerPage: 45,
     imageWidth: 1000,
     timeoutMs: 300_000,
+    /** Progress every 5 pages, or every ~10% for big documents. */
     progressEvery: 5,
   },
 

@@ -168,9 +168,13 @@ export const FILE_TOO_LARGE_TEXT =
 export const FILE_RECEIVED_TEXT =
   "📥 فایلت رسید. دارم پردازشش می‌کنم، یه کم صبر کن...";
 
-export const ocrStartedText = (total: number, skipped: number): string =>
+export const ocrStartedText = (
+  total: number,
+  skipped: number,
+  minutes: number,
+): string =>
   `🔍 ${total} صفحه از این فایل متن قابل‌خوندن نداره (اسکن‌شده یا خرابه) و باید با هوش مصنوعی خونده بشه. ` +
-  `این کار ممکنه چند دقیقه طول بکشه.` +
+  `این کار حدود ${minutes} دقیقه طول می‌کشه و تا تموم نشه، جواب سؤال‌هات هم کندتر می‌رسه.` +
   (skipped > 0
     ? `\n⚠️ ${skipped} صفحه دیگه به‌خاطر محدودیت تعداد صفحه خونده نمی‌شه.`
     : "");
@@ -210,8 +214,14 @@ export const NO_RELEVANT_CONTENT_TEXT =
 
 export const SOURCES_HEADING = "**منابع:**";
 
-export const sourceLineText = (filename: string, pageNumber: number): string =>
-  `${filename} — صفحه ${pageNumber}`;
+export const sourceLineText = (
+  filename: string,
+  pageNumber: number,
+  pageEnd?: number | null,
+): string =>
+  pageEnd && pageEnd > pageNumber
+    ? `${filename} — صفحه ${pageNumber} تا ${pageEnd}`
+    : `${filename} — صفحه ${pageNumber}`;
 
 // --- Errors ------------------------------------------------------------------
 
