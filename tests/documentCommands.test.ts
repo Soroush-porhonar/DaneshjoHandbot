@@ -11,7 +11,8 @@ vi.mock("../src/db/documents.js", () => ({
 }));
 
 const { parseCommand } = await import("../src/bot/commands/index.js");
-const { selectDocument } = await import("../src/db/conversations.js");
+type CommandReply = import("../src/bot/commands/types.js").CommandReply;
+const { getSelectedDocumentId, selectDocument } = await import("../src/db/conversations.js");
 const { deleteDocument, findDocumentFilename, listDocuments } = await import(
   "../src/db/documents.js"
 );
@@ -21,11 +22,24 @@ const messages = await import("../src/messages.js");
 const CHAT_ID = 5;
 const USER_ID = 8;
 
-/** Runs a command exactly like a user typing it. */
-async function run(text: string): Promise<string> {
+/** Runs a command exactly like a user typing it; returns the full reply. */
+async function reply(text: string): Promise<string | CommandReply> {
   const command = parseCommand(text);
   if (!command) throw new Error(`not a command: ${text}`);
   return command.handler({ chatId: CHAT_ID, userId: USER_ID, args: command.args });
+}
+
+/** The reply's text only. */
+async function run(text: string): Promise<string> {
+  const result = await reply(text);
+  return typeof result === "string" ? result : result.text;
+}
+
+/** callback_data of the reply's inline buttons, row by row. */
+async function buttonData(text: string): Promise<string[][]> {
+  const result = await reply(text);
+  if (typeof result === "string" || !("inline" in result.markup)) return [];
+  return result.markup.inline.map((row) => row.map((button) => button.callback_data));
 }
 
 beforeEach(() => {
@@ -41,6 +55,38 @@ describe("/documents", () => {
     vi.mocked(listDocuments).mockResolvedValue([]);
 
     expect(await run("/documents")).toBe(messages.NO_DOCUMENTS_TEXT);
+  });
+
+  it("puts select and delete buttons under the list; failed documents can only be deleted", async () => {
+    vi.mocked(listDocuments).mockResolvedValue([
+      { id: 3, filename: "notes.pdf", status: "completed" },
+      { id: 4, filename: "broken.pdf", status: "failed" },
+    ]);
+    vi.mocked(getSelectedDocumentId).mockResolvedValue(3);
+
+    expect(await buttonData("/documents")).toEqual([["sel:3", "del:3"], ["del:4"]]);
+  });
+
+  it("marks the active document and shortens long names", async () => {
+    const long = "جزوه درس آزمون نرم افزاراستاد زاغری 405.pdf";
+    vi.mocked(listDocuments).mockResolvedValue([
+      { id: 3, filename: "notes.pdf", status: "completed" },
+      { id: 9, filename: long, status: "completed" },
+    ]);
+    vi.mocked(getSelectedDocumentId).mockResolvedValue(3);
+
+    const result = (await reply("/documents")) as CommandReply;
+    const labels = "inline" in result.markup ? result.markup.inline.map((row) => row[0]!.text) : [];
+
+    expect(labels[0]).toBe("✅ notes");
+    expect(labels[1]!.startsWith("📌 ")).toBe(true);
+    expect(labels[1]!.length).toBeLessThanOrEqual(31);
+  });
+
+  it("opens from the main menu button too", async () => {
+    vi.mocked(listDocuments).mockResolvedValue([]);
+
+    expect(await run(messages.MENU_DOCUMENTS)).toBe(messages.NO_DOCUMENTS_TEXT);
   });
 });
 
@@ -66,8 +112,9 @@ describe("/select", () => {
 });
 
 describe("delete with confirmation", () => {
-  it("asks for confirmation before deleting anything", async () => {
+  it("asks for confirmation (with yes/no buttons) before deleting anything", async () => {
     expect(await run("/delete 4")).toBe(messages.deleteConfirmationText("notes.pdf", 4));
+    expect(await buttonData("/delete 4")).toEqual([["delok", "delno"]]);
     expect(deleteDocument).not.toHaveBeenCalled();
   });
 

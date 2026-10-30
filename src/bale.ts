@@ -69,6 +69,22 @@ export interface InlineButton {
   callback_data: string;
 }
 
+/**
+ * What can be attached to a message: buttons under it (`inline`), or a
+ * keyboard at the bottom of the chat whose labels are sent as text (`keyboard`).
+ */
+export type Markup = { inline: InlineButton[][] } | { keyboard: string[][] };
+
+function replyMarkup(markup: Markup): Record<string, unknown> {
+  return "inline" in markup
+    ? { inline_keyboard: markup.inline }
+    : { keyboard: markup.keyboard.map((row) => row.map((text) => ({ text }))) };
+}
+
+interface SentMessage {
+  message_id: number;
+}
+
 interface BaleFile {
   file_id: string;
   file_path: string;
@@ -114,15 +130,16 @@ async function callBale<T>(
 }
 
 /**
- * Sends a message, split into parts if it is too long. Buttons, if any, are
- * attached to the last part.
+ * Sends a message, split into parts if it is too long. Buttons or a keyboard,
+ * if any, are attached to the last part, whose message id is returned.
  */
 export async function sendMessage(
   chatId: number,
   text: string,
-  buttons?: InlineButton[][],
-): Promise<void> {
+  markup?: Markup,
+): Promise<number | undefined> {
   const parts = splitMessage(text);
+  let lastId: number | undefined;
 
   for (const [index, part] of parts.entries()) {
     logger.debug(
@@ -131,12 +148,30 @@ export async function sendMessage(
 
     const isLast = index === parts.length - 1;
 
-    await callBale("sendMessage", {
+    const sent = await callBale<SentMessage | undefined>("sendMessage", {
       chat_id: chatId,
       text: part,
-      ...(isLast && buttons ? { reply_markup: { inline_keyboard: buttons } } : {}),
+      ...(isLast && markup ? { reply_markup: replyMarkup(markup) } : {}),
     });
+    lastId = sent?.message_id;
   }
+
+  return lastId;
+}
+
+/** Replaces the text (and buttons) of a sent message; no buttons removes them. */
+export async function editMessageText(
+  chatId: number,
+  messageId: number,
+  text: string,
+  buttons?: InlineButton[][],
+): Promise<void> {
+  await callBale("editMessageText", {
+    chat_id: chatId,
+    message_id: messageId,
+    text,
+    reply_markup: { inline_keyboard: buttons ?? [] },
+  });
 }
 
 /** Acknowledges a button press; Bale keeps the button "loading" until this is called. */

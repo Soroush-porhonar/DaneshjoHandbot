@@ -1,3 +1,5 @@
+import type { Markup } from "../../bale.js";
+
 export interface CommandContext {
   chatId: number;
   userId: number;
@@ -5,5 +7,11 @@ export interface CommandContext {
   args: string[];
 }
 
-/** A command returns the reply text to send back to the user. */
-export type CommandHandler = (context: CommandContext) => Promise<string>;
+/** A reply with buttons (under the message) or a keyboard (at the bottom of the chat). */
+export interface CommandReply {
+  text: string;
+  markup: Markup;
+}
+
+/** A command returns the reply to send back: plain text, or text with buttons. */
+export type CommandHandler = (context: CommandContext) => Promise<string | CommandReply>;

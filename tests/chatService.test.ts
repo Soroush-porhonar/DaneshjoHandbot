@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Fakes for the database, Bale and every AI step, so only the flow is tested.
-vi.mock("../src/bale.js", () => ({ sendMessage: vi.fn() }));
+vi.mock("../src/bale.js", () => ({ sendMessage: vi.fn(), removeButtons: vi.fn() }));
 vi.mock("../src/db/users.js", () => ({ findOrCreateUser: vi.fn() }));
 vi.mock("../src/db/conversations.js", () => ({
   findOrCreateConversation: vi.fn(),
@@ -32,7 +32,7 @@ vi.mock("../src/rag/rewrite.js", async (importOriginal) => ({
 vi.mock("../src/rag/router.js", () => ({ routeMessage: vi.fn() }));
 
 const { handleMessage } = await import("../src/chat/chatService.js");
-const { sendMessage } = await import("../src/bale.js");
+const { removeButtons, sendMessage } = await import("../src/bale.js");
 const { findOrCreateUser } = await import("../src/db/users.js");
 const { findOrCreateConversation } = await import("../src/db/conversations.js");
 const { saveMessage, getRecentMessages } = await import("../src/db/messages.js");
@@ -142,12 +142,14 @@ describe("handleMessage", () => {
         latencyMs: expect.any(Number),
       }),
     );
-    expect(vi.mocked(sendMessage).mock.calls.at(-1)?.[2]).toEqual([
-      [
-        expect.objectContaining({ callback_data: "fb:77:1" }),
-        expect.objectContaining({ callback_data: "fb:77:-1" }),
+    expect(vi.mocked(sendMessage).mock.calls.at(-1)?.[2]).toEqual({
+      inline: [
+        [
+          expect.objectContaining({ callback_data: "fb:77:1" }),
+          expect.objectContaining({ callback_data: "fb:77:-1" }),
+        ],
       ],
-    ]);
+    });
   });
 
   it("logs chat answers too", async () => {
@@ -160,11 +162,33 @@ describe("handleMessage", () => {
     );
   });
 
-  it("does not log commands or add buttons to them", async () => {
+  it("does not log commands; a command's own buttons are sent (here: the main menu)", async () => {
     await handleMessage(CHAT_ID, "/help");
 
     expect(createAnswerLog).not.toHaveBeenCalled();
-    expect(vi.mocked(sendMessage).mock.calls.at(-1)?.[2]).toBeUndefined();
+    expect(vi.mocked(sendMessage).mock.calls.at(-1)?.[2]).toEqual({ keyboard: messages.MAIN_MENU });
+  });
+
+  it("shows a cancel button while answering and removes it afterwards", async () => {
+    vi.mocked(sendMessage).mockResolvedValueOnce(901); // the thinking notice
+    vi.mocked(routeMessage).mockResolvedValue({ route: "chat", retrievalMode: "focused" });
+
+    await handleMessage(CHAT_ID, "سلام");
+
+    const [, noticeText, noticeMarkup] = vi.mocked(sendMessage).mock.calls[0]!;
+    expect(noticeText).toBe(messages.THINKING_NOTICE_TEXT);
+    expect(noticeMarkup).toEqual({ inline: [[expect.objectContaining({ callback_data: "cancel" })]] });
+    expect(removeButtons).toHaveBeenCalledWith(CHAT_ID, 901);
+  });
+
+  it("removes the cancel button even when answering fails", async () => {
+    vi.mocked(sendMessage).mockResolvedValueOnce(902);
+    vi.mocked(routeMessage).mockRejectedValue(new Error("ollama down"));
+
+    await handleMessage(CHAT_ID, "سلام");
+
+    expect(removeButtons).toHaveBeenCalledWith(CHAT_ID, 902);
+    expect(lastReply()).toBe(messages.PROCESSING_FAILED_TEXT);
   });
 
   it("still sends the answer, without buttons, when logging fails", async () => {

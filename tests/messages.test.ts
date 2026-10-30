@@ -40,6 +40,18 @@ describe("user-facing messages", () => {
     expect(text).not.toMatch(/(کنید|بفرمایید|نکرده‌اید|ببینید|بفرستید)/);
   });
 
+  it.each(allMessages())(
+    "%s keeps every command left-to-right (shows /select 3, not 3 /select)",
+    (_name, text) => {
+      for (const match of text.matchAll(/\/[a-z_]+(?: \d+)?/g)) {
+        const start = match.index!;
+        const end = start + match[0].length;
+        expect(text[start - 1]).toBe("‎");
+        expect(text[end]).toBe("‎");
+      }
+    },
+  );
+
   it("advertises commands in the form the bot actually parses", () => {
     expect(messages.HELP_TEXT).toContain("/select 1");
     expect(messages.documentsListText([], null)).toContain("/select 3");

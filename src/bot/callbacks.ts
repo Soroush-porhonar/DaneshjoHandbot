@@ -1,0 +1,113 @@
+import {
+  answerCallbackQuery,
+  editMessageText,
+  removeButtons,
+  sendMessage,
+} from "../bale.js";
+import type { BaleUpdate } from "../bale.js";
+import { findOrCreateUser } from "../db/users.js";
+import { logger } from "../logger.js";
+import { NO_REQUEST_TO_CANCEL_TEXT, REQUEST_CANCELLED_TEXT } from "../messages.js";
+import { parseCallback } from "./buttons.js";
+import { cancelRequest } from "./cancellation.js";
+import {
+  cancelDeleteCommand,
+  confirmDeleteCommand,
+  deleteCommand,
+  documentsCommand,
+  selectCommand,
+} from "./commands/documents.js";
+import type { CommandReply } from "./commands/types.js";
+import { handleFeedback } from "./feedback.js";
+
+type CallbackQuery = NonNullable<BaleUpdate["callback_query"]>;
+
+const textOf = (reply: string | CommandReply) => (typeof reply === "string" ? reply : reply.text);
+
+async function send(chatId: number, reply: string | CommandReply): Promise<void> {
+  await (typeof reply === "string"
+    ? sendMessage(chatId, reply)
+    : sendMessage(chatId, reply.text, reply.markup));
+}
+
+/** Changing an old message is a nicety; never fail the press because of it. */
+async function tryTo(action: () => Promise<unknown>): Promise<void> {
+  try {
+    await action();
+  } catch (error: unknown) {
+    logger.warn("Could not update the message with buttons:", error);
+  }
+}
+
+/**
+ * Handles a button press. Buttons run the same logic as the typed commands
+ * (so ownership checks are the same), and the press is always acknowledged,
+ * otherwise Bale keeps the button "loading".
+ */
+export async function handleCallback(query: CallbackQuery): Promise<void> {
+  if (query.data?.startsWith("fb:")) {
+    await handleFeedback(query);
+    return;
+  }
+
+  const callback = parseCallback(query.data);
+  const chatId = query.message?.chat.id;
+  const messageId = query.message?.message_id;
+
+  if (!callback || chatId === undefined) {
+    await answerCallbackQuery(query.id);
+    return;
+  }
+
+  if (callback.action === "cancel") {
+    const cancelled = cancelRequest(chatId);
+    await answerCallbackQuery(query.id, cancelled ? REQUEST_CANCELLED_TEXT : NO_REQUEST_TO_CANCEL_TEXT);
+    if (messageId !== undefined) await tryTo(() => removeButtons(chatId, messageId));
+    return;
+  }
+
+  const user = await findOrCreateUser(String(chatId));
+  const context = { chatId, userId: user.id, args: [] as string[] };
+
+  switch (callback.action) {
+    case "documents": {
+      await answerCallbackQuery(query.id);
+      await send(chatId, await documentsCommand(context));
+      return;
+    }
+
+    case "select": {
+      const reply = await selectCommand({ ...context, args: [String(callback.documentId)] });
+      await answerCallbackQuery(query.id, textOf(reply));
+
+      // Show the new active document (✅) in the same list message.
+      const list = await documentsCommand(context);
+      if (messageId !== undefined && typeof list !== "string" && "inline" in list.markup) {
+        const buttons = list.markup.inline;
+        await tryTo(() => editMessageText(chatId, messageId, list.text, buttons));
+      }
+      return;
+    }
+
+    case "delete": {
+      await answerCallbackQuery(query.id);
+      await send(chatId, await deleteCommand({ ...context, args: [String(callback.documentId)] }));
+      return;
+    }
+
+    case "confirmDelete":
+    case "cancelDelete": {
+      const handler = callback.action === "confirmDelete" ? confirmDeleteCommand : cancelDeleteCommand;
+      const result = textOf(await handler(context));
+      await answerCallbackQuery(query.id);
+
+      // Replace the question with the result, so the buttons can't be pressed twice.
+      if (messageId !== undefined) {
+        await tryTo(() => editMessageText(chatId, messageId, result));
+      } else {
+        await sendMessage(chatId, result);
+      }
+      return;
+    }
+  }
+}
