@@ -8,9 +8,13 @@ function allMessages(): [string, string][] {
   for (const [name, value] of Object.entries(messages)) {
     if (typeof value === "string") {
       samples.push([name, value]);
-    } else if (name === "documentsListText") {
-      samples.push([name, messages.documentsListText([{ id: 3, filename: "جزوه.pdf", status: "completed" }], 3)]);
-      samples.push([`${name}(none selected)`, messages.documentsListText([{ id: 3, filename: "جزوه.pdf", status: "failed" }], null)]);
+    } else if (name === "documentNameButton" || name === "documentInfoText") {
+      // These take a document status, not numbers.
+      const fn = value as (name: string, status: string, active: boolean) => string;
+      for (const status of ["pending", "processing", "completed", "failed"]) {
+        samples.push([`${name}(${status})`, fn("جزوه.pdf", status, false)]);
+      }
+      samples.push([`${name}(active)`, fn("جزوه.pdf", "completed", true)]);
     } else if (typeof value === "function") {
       const fn = value as (...args: unknown[]) => string;
       samples.push([name, fn("جزوه.pdf", 2, 3)]);
@@ -40,9 +44,28 @@ describe("user-facing messages", () => {
     expect(text).not.toMatch(/(کنید|بفرمایید|نکرده‌اید|ببینید|بفرستید)/);
   });
 
-  it("advertises commands in the form the bot actually parses", () => {
-    expect(messages.HELP_TEXT).toContain("/select 1");
-    expect(messages.documentsListText([], null)).toContain("/select 3");
-    expect(messages.documentsListText([], null)).not.toMatch(/\d\s*\/select/);
+  it.each(allMessages())(
+    "%s keeps every command left-to-right (shows /select 3, not 3 /select)",
+    (_name, text) => {
+      for (const match of text.matchAll(/\/[a-z_]+(?: \d+)?/g)) {
+        const start = match.index!;
+        const end = start + match[0].length;
+        expect(text[start - 1]).toBe("‎");
+        expect(text[end]).toBe("‎");
+      }
+    },
+  );
+
+  it("shows typed commands in the form the bot actually parses", () => {
+    // Help no longer lists commands (buttons do the work); the usage hints still show them.
+    expect(messages.SELECT_USAGE_TEXT).toContain("/select 1");
+    expect(messages.DELETE_USAGE_TEXT).toContain("/delete 1");
+  });
+
+  it("the documents list only explains the active document; the buttons show the documents", () => {
+    expect(messages.DOCUMENTS_LIST_TEXT).toContain("سند فعال");
+    expect(messages.DOCUMENTS_LIST_TEXT).toContain(messages.SELECT_BUTTON);
+    expect(messages.DOCUMENTS_LIST_TEXT).toContain(messages.DELETE_BUTTON);
+    expect(messages.DOCUMENTS_LIST_TEXT).not.toContain("شناسه");
   });
 });

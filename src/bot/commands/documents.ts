@@ -16,7 +16,7 @@ import {
   SELECT_USAGE_TEXT,
   deleteConfirmationText,
   deleteSucceededText,
-  documentsListText,
+  DOCUMENTS_LIST_TEXT,
   selectedText,
 } from "../../messages.js";
 import {
@@ -25,6 +25,7 @@ import {
   setPendingDeletion,
 } from "../pendingDelete.js";
 import type { CommandHandler } from "./types.js";
+import { confirmDeleteButtons, documentButtons } from "../buttons.js";
 
 /** Parses a single positive-integer argument, or returns null. */
 function parseDocumentId(args: string[]): number | null {
@@ -46,7 +47,10 @@ export const documentsCommand: CommandHandler = async ({ userId }) => {
 
   const selectedDocumentId = await getSelectedDocumentId(userId);
 
-  return documentsListText(documents, selectedDocumentId);
+  return {
+    text: DOCUMENTS_LIST_TEXT,
+    markup: { inline: documentButtons(documents, selectedDocumentId) },
+  };
 };
 
 export const selectCommand: CommandHandler = async ({ userId, args }) => {
@@ -80,7 +84,10 @@ export const deleteCommand: CommandHandler = async ({
 
   setPendingDeletion(chatId, documentId);
 
-  return deleteConfirmationText(filename, documentId);
+  return {
+    text: deleteConfirmationText(filename, documentId),
+    markup: { inline: confirmDeleteButtons() },
+  };
 };
 
 export const confirmDeleteCommand: CommandHandler = async ({

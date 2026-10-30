@@ -24,6 +24,7 @@ Built with TypeScript, Node.js, PostgreSQL, pgvector, Ollama, and Qwen 3.5 9B.
 - **Follow-Up Understanding:** Short follow-ups ("explain more") are rewritten into standalone questions using the conversation.
 - **Long-Document Summarization:** Summarize document batches sized to the model's context window, then combine them.
 - **Non-Blocking & Cancellable:** Slow work runs in the background; `/cancel` stops a running request.
+- **Buttons:** A main-menu keyboard, select/delete buttons under the document list, yes/no delete confirmation and a cancel button while answering; typed commands still work and are shown so they render correctly in right-to-left text.
 - **Feedback Loop:** Every answer has 👍/👎 buttons; answers and votes are logged, and disliked answers become draft evaluation questions.
 
 ## Technical Highlights

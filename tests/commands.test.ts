@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseCommand } from "../src/bot/commands/index.js";
+import { MENU_ABOUT, MENU_DOCUMENTS, MENU_HELP } from "../src/messages.js";
 
 describe("parseCommand", () => {
   it("returns null for plain text", () => {
@@ -19,5 +20,21 @@ describe("parseCommand", () => {
 
   it("ignores unknown slash commands", () => {
     expect(parseCommand("/unknown")).toBeNull();
+  });
+
+  it("accepts a command copied together with its invisible direction marks", () => {
+    const parsed = parseCommand("‎/select 3‎");
+
+    expect(parsed?.args).toEqual(["3"]);
+  });
+
+  it("maps the main menu buttons to their commands", () => {
+    expect(parseCommand(MENU_DOCUMENTS)).not.toBeNull();
+    expect(parseCommand(MENU_HELP)).not.toBeNull();
+    expect(parseCommand(MENU_ABOUT)).not.toBeNull();
+  });
+
+  it("does not treat a question that merely mentions a menu label as a command", () => {
+    expect(parseCommand(`${MENU_HELP} برای چیه؟`)).toBeNull();
   });
 });

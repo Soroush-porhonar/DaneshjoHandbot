@@ -1,4 +1,6 @@
-import { sendMessage } from "../bale.js";
+import { removeButtons, sendMessage } from "../bale.js";
+import type { Markup } from "../bale.js";
+import { cancelButton } from "../bot/buttons.js";
 import { parseCommand } from "../bot/commands/index.js";
 import {
   PROCESSING_FAILED_TEXT,
@@ -39,9 +41,10 @@ async function notify(chatId: number, text: string): Promise<boolean> {
 
 type AnswerLogInfo = Omit<NewAnswerLog, "userId" | "answer" | "latencyMs">;
 
-/** A reply, plus what to record about it when it answered a question. */
+/** A reply, plus buttons for it and what to record when it answered a question. */
 interface Reply {
   answer: string;
+  markup?: Markup;
   log?: AnswerLogInfo;
 }
 
@@ -54,15 +57,37 @@ const chatLog = (question: string): AnswerLogInfo => ({
   context: [],
 });
 
-/** Answers a plain-text message, using documents when the router says so. */
+/**
+ * Answers a plain-text message. While it works, a "thinking" notice with a
+ * ⏹️ cancel button is shown; the button is removed when the work ends.
+ */
 async function answerQuestion(
   chatId: number,
+  session: Session,
+  text: string,
+  signal?: AbortSignal,
+): Promise<Reply> {
+  const noticeId = await sendMessage(chatId, THINKING_NOTICE_TEXT, { inline: cancelButton() });
+
+  try {
+    return await composeAnswer(session, text, signal);
+  } finally {
+    if (noticeId !== undefined) {
+      try {
+        await removeButtons(chatId, noticeId);
+      } catch {
+        // Not critical (e.g. already removed by the cancel press).
+      }
+    }
+  }
+}
+
+/** Answers using documents when the router says so, otherwise as general chat. */
+async function composeAnswer(
   { userId, conversationId }: Session,
   text: string,
   signal?: AbortSignal,
 ): Promise<Reply> {
-  await sendMessage(chatId, THINKING_NOTICE_TEXT);
-
   const documentNames = await listCompletedFilenames(userId);
   const history = await getRecentMessages(
     conversationId,
@@ -155,15 +180,12 @@ export async function handleMessage(
   try {
     const command = parseCommand(text);
 
-    reply = command
-      ? {
-          answer: await command.handler({
-            chatId,
-            userId: session.userId,
-            args: command.args,
-          }),
-        }
-      : await answerQuestion(chatId, session, text, signal);
+    if (command) {
+      const result = await command.handler({ chatId, userId: session.userId, args: command.args });
+      reply = typeof result === "string" ? { answer: result } : { answer: result.text, markup: result.markup };
+    } else {
+      reply = await answerQuestion(chatId, session, text, signal);
+    }
   } catch (error: unknown) {
     if (signal?.aborted) {
       logger.info("Request cancelled:", { chatId });
@@ -184,8 +206,10 @@ export async function handleMessage(
   // Answers to questions get 👍/👎 buttons; commands and errors do not.
   const logId = await logAnswer(session.userId, reply, Date.now() - started);
 
+  const markup = logId === null ? reply.markup : { inline: feedbackButtons(logId) };
+
   try {
-    await sendMessage(chatId, reply.answer, logId === null ? undefined : feedbackButtons(logId));
+    await sendMessage(chatId, reply.answer, markup);
     return true;
   } catch (error: unknown) {
     logger.error("Failed to send Bale message:", error);

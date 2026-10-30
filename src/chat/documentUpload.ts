@@ -13,6 +13,7 @@ import { findOrCreateUser } from "../db/users.js";
 import { getDocumentErrorText, getErrorMessage } from "../errors.js";
 import { logger } from "../logger.js";
 import { ingestPdf } from "../rag/ingest.js";
+import { documentsButton } from "../bot/buttons.js";
 
 function isPdf(document: BaleDocument, filename: string): boolean {
   return (
@@ -68,7 +69,7 @@ export async function handleDocument(
       },
     );
 
-    await sendMessage(chatId, fileProcessedText(result.ocrPages));
+    await sendMessage(chatId, fileProcessedText(result.ocrPages), { inline: documentsButton() });
 
     return true;
   } catch (error: unknown) {

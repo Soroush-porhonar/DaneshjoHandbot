@@ -5,9 +5,30 @@
  * - Persian only; the only Latin text allowed is "PDF" and command names.
  * - Friendly, informal "تو" voice (می‌تونی، بفرست، دوباره امتحان کن).
  * - Bold (**...**) only for section titles; one emoji at the start of a section.
- * - Commands are written like /select 3 so they are easy to copy.
+ * - Commands are always written with cmd(), e.g. cmd("/select 3").
+ * - Buttons do the common actions; typed commands keep working.
  */
-import type { DocumentStatus, DocumentSummary } from "./db/documents.js";
+import type { DocumentStatus } from "./db/documents.js";
+
+/** Left-to-right mark (invisible). */
+const LRM = "‎";
+
+/**
+ * A command as shown to users. Inside right-to-left Persian text, clients
+ * reorder "/select 3" into "3 /select"; the marks keep it in order.
+ */
+const cmd = (command: string): string => `${LRM}${command}${LRM}`;
+
+// --- Main menu (keyboard at the bottom of the chat) ---------------------------
+
+export const MENU_DOCUMENTS = "📚 جزوه‌های من";
+export const MENU_HELP = "❓ راهنما";
+export const MENU_ABOUT = "ℹ️ درباره";
+
+export const MAIN_MENU: string[][] = [
+  [MENU_DOCUMENTS],
+  [MENU_HELP, MENU_ABOUT],
+];
 
 // --- Info commands -----------------------------------------------------------
 
@@ -20,7 +41,7 @@ export const START_TEXT = `سلام! 👋 به دانشجویار خوش اوم�
 ۲. صبر کن تا پردازش فایل تموم بشه.
 ۳. سؤالت رو بپرس تا بر اساس جزوه جوابت رو بدم.
 
-برای دیدن همه دستورها، /help رو بفرست.
+از دکمه‌های پایین صفحه هم می‌تونی جزوه‌هات و راهنما رو ببینی.
 
 یادگیری بهتر، قدم‌به‌قدم! 🌱`;
 
@@ -34,22 +55,14 @@ export const HELP_TEXT = `📚 **راهنمای دانشجویار**
 یک فایل PDF بفرست. بعد از پردازش، خودکار به‌عنوان سند فعال انتخاب می‌شه. اگه فایل اسکن‌شده باشه، پردازشش چند دقیقه طول می‌کشه.
 
 💬 **۲. پرسیدن سؤال**
-سؤالت رو درباره سند فعال بپرس. لازم نیست هر بار فایل رو دوباره انتخاب کنی.
+سؤالت رو درباره سند فعال بپرس. لازم نیست هر بار فایل رو دوباره انتخاب کنی. زیر هر جواب با 👍 یا 👎 بگو مفید بود یا نه.
 
 📚 **۳. مدیریت جزوه‌ها**
-برای دیدن جزوه‌هات، عوض کردن سند فعال یا حذف یک جزوه، /documents رو بفرست.
+دکمه «${MENU_DOCUMENTS}» رو بزن؛ زیر فهرست، برای انتخاب یا حذف هر جزوه دکمه هست.
 
 🌐 **۴. سؤال‌های عمومی**
 اگه سؤالت به جزوه‌هات ربطی نداشته باشه، مثل یک دستیار هوشمند معمولی جوابت رو می‌دم.
 
-**دستورها:**
-/start — شروع
-/help — نمایش این راهنما
-/about — درباره دانشجویار
-/documents — دیدن و مدیریت جزوه‌ها
-/select 1 — انتخاب سند فعال
-/delete 1 — حذف یک جزوه
-/cancel — لغو درخواست در حال انجام
 
 💡 **نکته:** هر PDF جدیدی که با موفقیت پردازش بشه، خودکار سند فعال می‌شه.`;
 
@@ -80,56 +93,56 @@ export const DOCUMENT_STATUS_TEXT: Record<DocumentStatus, string> = {
 export const NO_DOCUMENTS_TEXT =
   "هنوز هیچ جزوه‌ای نفرستادی.\n\nبرای شروع، یک فایل PDF برام بفرست. 📄";
 
-export function documentsListText(
-  documents: DocumentSummary[],
-  selectedDocumentId: number | null,
-): string {
-  const active = documents.find((document) => document.id === selectedDocumentId);
+/** Button labels under the documents list (one row per document). */
+export const SELECT_BUTTON = "📌 انتخاب";
+export const ACTIVE_BUTTON = "✅ فعال";
+export const DELETE_BUTTON = "🗑️ حذف";
 
-  const activeText = active
-    ? `📌 **سند فعال**\n` +
-      `📄 ${active.filename}\n` +
-      `شناسه: ${active.id}\n` +
-      `وضعیت: ${DOCUMENT_STATUS_TEXT[active.status]}`
-    : `📌 **سند فعال**\nهنوز سندی انتخاب نشده.`;
+/** The document's name on its button: ✅ active, ⏳ still processing, ⚠️ failed. */
+export const documentNameButton = (
+  name: string,
+  status: DocumentStatus,
+  active: boolean,
+): string => {
+  const icon = active
+    ? "✅"
+    : status === "failed"
+      ? "⚠️"
+      : status === "completed"
+        ? "📄"
+        : "⏳";
+  return `${icon} ${name}`;
+};
 
-  const list = documents
-    .map(
-      (document, index) =>
-        `${index + 1}. ${document.filename}\n` +
-        `   شناسه: ${document.id}\n` +
-        `   وضعیت: ${DOCUMENT_STATUS_TEXT[document.status]}`,
-    )
-    .join("\n\n");
+/** Popup when a document's name is tapped (names on buttons are shortened). */
+export const documentInfoText = (
+  filename: string,
+  status: DocumentStatus,
+  active: boolean,
+): string =>
+  `${filename}\nوضعیت: ${DOCUMENT_STATUS_TEXT[status]}${active ? " — سند فعال" : ""}`;
 
-  return (
-    `${activeText}\n\n` +
-    `📚 **جزوه‌های تو**\n\n` +
-    `${list}\n\n` +
-    `🔄 **تغییر سند فعال**\n` +
-    `برای استفاده از یکی از جزوه‌های قبلی، دستور /select و شناسه‌اش رو بفرست.\n` +
-    `مثلاً: /select 3\n\n` +
-    `🗑️ **حذف جزوه**\n` +
-    `برای حذف یک جزوه، دستور /delete و شناسه‌اش رو بفرست.\n` +
-    `مثلاً: /delete 3\n\n` +
-    `💡 **نکته:** هر PDF جدیدی که با موفقیت پردازش بشه، خودکار سند فعال می‌شه.`
-  );
-}
+export const DOCUMENTS_LIST_TEXT =
+  `📚 **جزوه‌های تو**\n\n` +
+  `📌 **سند فعال** جزوه‌ایه که سؤال‌هات از روی اون جواب داده می‌شه؛ کنار اسمش ✅ می‌بینی. ` +
+  `هر PDF جدیدی که بفرستی، بعد از پردازش خودکار سند فعال می‌شه.\n\n` +
+  `👇 برای فعال کردن یک جزوه «${SELECT_BUTTON}» و برای پاک کردنش «${DELETE_BUTTON}» رو بزن.`;
 
-export const SELECT_USAGE_TEXT = "شناسه جزوه رو این‌طوری وارد کن:\n/select 1";
+export const SELECT_USAGE_TEXT = `شناسه جزوه رو این‌طوری وارد کن:\n${cmd("/select 1")}`;
 
-export const SELECT_FAILED_TEXT =
-  "این جزوه پیدا نشد، هنوز پردازشش تموم نشده یا مال تو نیست. شناسه‌ها رو از /documents ببین.";
+export const SELECT_FAILED_TEXT = `این جزوه پیدا نشد، هنوز پردازشش تموم نشده یا مال تو نیست. فهرست جزوه‌ها: ${cmd("/documents")}`;
 
 export const selectedText = (documentId: number): string =>
   `✅ جزوه شماره ${documentId} به‌عنوان سند فعال انتخاب شد. حالا می‌تونی سؤالت رو بپرسی.`;
 
 // --- Deleting a document -------------------------------------------------------
 
-export const DELETE_USAGE_TEXT = "شناسه جزوه رو این‌طوری وارد کن:\n/delete 1";
+export const DELETE_CONFIRM_BUTTON = "✅ بله، حذف کن";
+export const DELETE_CANCEL_BUTTON = "❌ انصراف";
 
-export const DELETE_NOT_FOUND_TEXT =
-  "این جزوه پیدا نشد یا مال تو نیست. شناسه‌ها رو از /documents ببین.";
+export const DELETE_USAGE_TEXT = `شناسه جزوه رو این‌طوری وارد کن:\n${cmd("/delete 1")}`;
+
+export const DELETE_NOT_FOUND_TEXT = `این جزوه پیدا نشد یا مال تو نیست. فهرست جزوه‌ها: ${cmd("/documents")}`;
 
 export const deleteConfirmationText = (
   filename: string,
@@ -138,13 +151,10 @@ export const deleteConfirmationText = (
   `🗑️ **تأیید حذف جزوه**\n\n` +
   `نام فایل: ${filename}\n` +
   `شناسه: ${documentId}\n\n` +
-  `مطمئنی می‌خوای این جزوه رو حذف کنی؟\n\n` +
-  `برای تأیید: /confirm_delete\n` +
-  `برای انصراف: /cancel_delete\n\n` +
+  `مطمئنی می‌خوای این جزوه رو حذف کنی؟ روی یکی از دکمه‌های زیر بزن.\n\n` +
   `⚠️ با حذف جزوه، محتوای ذخیره‌شده‌ش هم برای همیشه پاک می‌شه. این درخواست فقط یک دقیقه معتبره.`;
 
-export const NO_PENDING_DELETE_TEXT =
-  "درخواست حذفی در انتظار نیست. برای شروع، دستور /delete و شناسه جزوه رو بفرست.";
+export const NO_PENDING_DELETE_TEXT = `درخواست حذفی در انتظار نیست (شاید بیشتر از یک دقیقه گذشته). دوباره از فهرست جزوه‌ها حذفش کن: ${cmd("/documents")}`;
 
 export const deleteSucceededText = (documentId: number): string =>
   `✅ جزوه شماره ${documentId} حذف شد.`;
@@ -185,14 +195,16 @@ export const ocrProgressText = (done: number, total: number): string =>
 export const fileProcessedText = (ocrPages: number): string =>
   `✅ جزوه‌ات آماده‌ست و به‌عنوان **سند فعال** انتخاب شد.\n\n` +
   `حالا می‌تونی مستقیم درباره‌ش سؤال بپرسی.\n\n` +
-  `📚 برای دیدن جزوه‌های قبلی یا عوض کردن سند فعال: /documents` +
+  `📚 برای دیدن جزوه‌های قبلی یا عوض کردن سند فعال، دکمه زیر رو بزن.` +
   (ocrPages > 0 ? `\n\n🔍 ${ocrPages} صفحه با تشخیص متن خونده شد.` : "");
 
 // --- Chatting ------------------------------------------------------------------
 
+export const CANCEL_BUTTON = "⏹️ لغو";
+
 export const THINKING_NOTICE_TEXT =
   "⏳ دارم سؤالت رو بررسی می‌کنم و جواب رو آماده می‌کنم...\n\n" +
-  "برای توقف، /cancel رو بفرست.";
+  `برای توقف، دکمه «${CANCEL_BUTTON}» رو بزن.`;
 
 export const REQUEST_CANCELLED_TEXT = "⏹️ درخواستت لغو شد.";
 
@@ -203,8 +215,7 @@ export const NO_REQUEST_TO_CANCEL_TEXT =
 
 export const NO_DOCUMENT_SELECTED_TEXT =
   "هنوز جزوه‌ای برای مطالعه انتخاب نکردی.\n\n" +
-  "با /documents فهرست جزوه‌هات رو ببین و با /select شناسه جزوه رو انتخاب کن.\n" +
-  "مثلاً: /select 1";
+  `دکمه «${MENU_DOCUMENTS}» رو بزن و جزوه‌ای که می‌خوای رو انتخاب کن.`;
 
 export const NO_DOCUMENT_CONTENT_TEXT =
   "توی جزوه انتخاب‌شده محتوایی پیدا نکردم.";
