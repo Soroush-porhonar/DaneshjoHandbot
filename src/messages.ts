@@ -210,8 +210,14 @@ export const NO_RELEVANT_CONTENT_TEXT =
 
 export const SOURCES_HEADING = "**منابع:**";
 
-export const sourceLineText = (filename: string, pageNumber: number): string =>
-  `${filename} — صفحه ${pageNumber}`;
+export const sourceLineText = (
+  filename: string,
+  pageNumber: number,
+  pageEnd?: number | null,
+): string =>
+  pageEnd && pageEnd > pageNumber
+    ? `${filename} — صفحه ${pageNumber} تا ${pageEnd}`
+    : `${filename} — صفحه ${pageNumber}`;
 
 // --- Errors ------------------------------------------------------------------
 

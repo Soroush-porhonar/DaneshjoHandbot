@@ -35,6 +35,21 @@ export const config = {
   rag: {
     chunkSize: 1200,
     chunkOverlap: 200,
+    /**
+     * Chunking features, switchable by env to re-measure (npm run eval).
+     * Measured on 65 questions / 6 documents: per-page chunks were best; the
+     * cross-page and semantic variants lowered hit@1 on long notes, whose
+     * pages already hold one subtopic each, so they are off by default.
+     */
+    chunking: {
+      stripBoilerplate: process.env.CHUNK_STRIP_BOILERPLATE !== "false",
+      titleInEmbedding: process.env.CHUNK_TITLE_IN_EMBEDDING !== "false",
+      crossPage: process.env.CHUNK_CROSS_PAGE === "true",
+      /** Running text: cut where the topic changes (sentence embeddings). */
+      semantic: process.env.CHUNK_SEMANTIC === "true",
+    },
+    /** Slide decks: give the model the hit's whole section (no measured effect at the current context cap). */
+    sectionExpansion: process.env.SECTION_EXPANSION === "true",
     maxCosineDistance: 0.55,
     /** Vector hits per question mode. */
     retrievalLimits: { focused: 3, multi_part: 5 },

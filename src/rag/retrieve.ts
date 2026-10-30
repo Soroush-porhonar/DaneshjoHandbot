@@ -7,7 +7,11 @@ export interface RetrievedChunk {
   documentId: number;
   filename: string;
   pageNumber: number | null;
+  /** Last page of a chunk that crosses pages; null for older chunks. */
+  pageEnd?: number | null;
   chunkIndex: number;
+  /** Slide decks: chunks with the same title share a section; null otherwise. */
+  sectionIndex?: number | null;
   content: string;
   distance: number;
 }
@@ -17,7 +21,9 @@ export interface ContextChunk {
   documentId: number;
   filename: string;
   pageNumber: number | null;
+  pageEnd?: number | null;
   chunkIndex: number;
+  sectionIndex?: number | null;
   content: string;
   /** True for a direct search hit, false for a neighbour added for context. */
   isHit: boolean;
@@ -29,6 +35,7 @@ export interface DocumentChunk {
   documentId: number;
   filename: string;
   pageNumber: number | null;
+  pageEnd?: number | null;
   chunkIndex: number;
   content: string;
 }
@@ -46,6 +53,7 @@ export async function getDocumentChunks(
        d.id AS "documentId",
        d.filename,
        dc.page_number AS "pageNumber",
+       dc.page_end AS "pageEnd",
        dc.chunk_index AS "chunkIndex",
        dc.content
      FROM documents d
@@ -92,7 +100,9 @@ export async function retrieveRelevantChunks(
          dc.document_id AS "documentId",
          d.filename,
          dc.page_number AS "pageNumber",
+         dc.page_end AS "pageEnd",
          dc.chunk_index AS "chunkIndex",
+         dc.section_index AS "sectionIndex",
          dc.content,
          dc.embedding <=> $2::vector AS distance,
          ROW_NUMBER() OVER (
@@ -115,7 +125,9 @@ export async function retrieveRelevantChunks(
        "documentId",
        filename,
        "pageNumber",
+       "pageEnd",
        "chunkIndex",
+       "sectionIndex",
        content,
        distance
      FROM ranked_chunks
@@ -137,34 +149,46 @@ export async function retrieveRelevantChunks(
   return result.rows;
 }
 
-async function getChunksByIndex(
+/** Chunks by position, plus every chunk of the given sections. */
+async function getNeighbours(
   documentId: number,
   chunkIndexes: number[],
+  sectionIndexes: number[],
 ): Promise<ContextChunk[]> {
-  if (chunkIndexes.length === 0) return [];
+  if (chunkIndexes.length === 0 && sectionIndexes.length === 0) return [];
 
   const result = await pool.query<ContextChunk>(
     `SELECT
        dc.document_id AS "documentId",
        d.filename,
        dc.page_number AS "pageNumber",
+       dc.page_end AS "pageEnd",
        dc.chunk_index AS "chunkIndex",
+       dc.section_index AS "sectionIndex",
        dc.content,
        false AS "isHit"
      FROM document_chunks dc
      JOIN documents d ON d.id = dc.document_id
      WHERE dc.document_id = $1
-       AND dc.chunk_index = ANY($2::int[])`,
-    [documentId, chunkIndexes],
+       AND (dc.chunk_index = ANY($2::int[]) OR dc.section_index = ANY($3::int[]))`,
+    [documentId, chunkIndexes, sectionIndexes],
   );
 
   return result.rows;
 }
 
+/** A neighbour belongs to a hit when it is next to it or in the same section. */
+function belongsTo(chunk: ContextChunk, hit: ContextChunk): boolean {
+  return (
+    Math.abs(chunk.chunkIndex - hit.chunkIndex) === 1 ||
+    (hit.sectionIndex != null && chunk.sectionIndex === hit.sectionIndex)
+  );
+}
+
 /**
- * Combines ranked hits with their neighbouring chunks: hits always come first,
- * then neighbours (closest to the best hit first) until `cap` chunks are used.
- * The result is de-duplicated and in reading order.
+ * Combines ranked hits with their neighbours: hits always come first, then
+ * neighbours of the best-ranked hit (closest first), then of the next hit,
+ * until `cap` chunks are used. The result is de-duplicated and in reading order.
  */
 export function mergeContext(
   hits: ContextChunk[],
@@ -178,16 +202,18 @@ export function mergeContext(
     chosen.set(chunk.chunkIndex, chunk);
   }
 
-  const hitRank = new Map(hits.map((hit, rank) => [hit.chunkIndex, rank]));
-  const nearestHit = (chunk: ContextChunk): number => {
-    const ranks = [chunk.chunkIndex - 1, chunk.chunkIndex + 1]
-      .map((index) => hitRank.get(index))
-      .filter((rank): rank is number => rank !== undefined);
+  // Lower is better: rank of the hit it belongs to, then distance from that hit.
+  const priority = (chunk: ContextChunk): number => {
+    const scores = hits
+      .map((hit, rank) =>
+        belongsTo(chunk, hit) ? rank * 10_000 + Math.abs(chunk.chunkIndex - hit.chunkIndex) : null,
+      )
+      .filter((score): score is number => score !== null);
 
-    return ranks.length > 0 ? Math.min(...ranks) : Number.MAX_SAFE_INTEGER;
+    return scores.length > 0 ? Math.min(...scores) : Number.MAX_SAFE_INTEGER;
   };
 
-  const ranked = [...neighbours].sort((a, b) => nearestHit(a) - nearestHit(b));
+  const ranked = [...neighbours].sort((a, b) => priority(a) - priority(b));
 
   for (const chunk of ranked) {
     if (chosen.size >= cap) break;
@@ -199,7 +225,8 @@ export function mergeContext(
 
 /**
  * The context sent to the model for focused / multi-part questions:
- * the most similar chunks plus the chunks right before and after them.
+ * the most similar chunks plus the chunks right before and after them, and
+ * for slide decks the other slides of the same section.
  */
 export async function retrieveContext(
   userId: number,
@@ -227,7 +254,13 @@ export async function retrieveContext(
     }
   }
 
-  const neighbours = await getChunksByIndex(documentId, [...wanted]);
+  const sections = config.rag.sectionExpansion
+    ? [...new Set(hits.map((hit) => hit.sectionIndex).filter((s): s is number => s != null))]
+    : [];
+
+  const neighbours = (await getNeighbours(documentId, [...wanted], sections)).filter(
+    (chunk) => !hitIndexes.has(chunk.chunkIndex),
+  );
 
   return mergeContext(hits, neighbours, config.rag.maxContextChunks[mode]);
 }

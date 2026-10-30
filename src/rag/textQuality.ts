@@ -35,14 +35,27 @@ const BROKEN_LETTER_RATIO = 0.12;
 const MIN_TOKENS_FOR_RATIO = 15;
 
 /**
+ * Below this share of letters the text layer is junk (fonts mapped to digits
+ * and symbols). Measured: junk PDFs 0%, code-heavy real slides at least 40%.
+ */
+const MIN_LETTER_RATIO = 0.2;
+
+/**
  * Decides whether a page's text layer is trustworthy.
- * Poor pages (empty, or letters split by spaces) are candidates for OCR.
+ * Poor pages (empty, junk symbols, or letters split by spaces) are candidates for OCR.
  */
 export function assessPage(text: string, minChars: number): PageAssessment {
   const normalized = normalizeText(text);
+  const visible = normalized.replace(/\s/g, "");
 
-  if (normalized.length < minChars) {
+  if (visible.length < minChars) {
     return { ok: false, reason: "no text layer" };
+  }
+
+  const letters = visible.match(/\p{L}/gu)?.length ?? 0;
+
+  if (letters / visible.length < MIN_LETTER_RATIO) {
+    return { ok: false, reason: "junk text" };
   }
 
   const tokens = normalized.split(/\s+/);
@@ -58,6 +71,46 @@ export function assessPage(text: string, minChars: number): PageAssessment {
   }
 
   return { ok: true };
+}
+
+/** Sentence punctuation that ends a Persian sentence or clause. */
+const LINE_PUNCTUATION = /^[.!?؟،؛:]/;
+const LINE_END_PUNCTUATION = /[.!?؟،؛:]$/;
+
+/**
+ * Some PDFs store each line of Persian text with its words in reverse order
+ * (".آمدم دنیا به" instead of "به دنیا آمدم."). The tell-tale sign is that
+ * punctuation sits at the start of lines instead of the end.
+ */
+export function hasReversedLines(pages: string[]): boolean {
+  const lines = pages
+    .flatMap((page) => page.split("\n"))
+    .map((line) => line.trim())
+    .filter((line) => line.split(/\s+/).length >= 3);
+
+  if (lines.length < 10) return false;
+
+  const starts = lines.filter((line) => LINE_PUNCTUATION.test(line)).length;
+  const ends = lines.filter((line) => LINE_END_PUNCTUATION.test(line)).length;
+
+  // Measured: the reversed PDF has 19% of lines starting with punctuation
+  // (and few ending with it); normal documents have at most 1%.
+  return starts / lines.length >= 0.1 && starts > 2 * ends;
+}
+
+/** Puts the words of every line back in reading order; leading punctuation moves to the end. */
+export function reverseLineWords(text: string): string {
+  return text
+    .split("\n")
+    .map((line) =>
+      line
+        .trim()
+        .split(/\s+/)
+        .reverse()
+        .map((word) => word.replace(/^([.!?؟،؛:]+)(.+)$/, "$2$1"))
+        .join(" "),
+    )
+    .join("\n");
 }
 
 /** True for model output that is empty or stuck in a loop (same line repeated). */

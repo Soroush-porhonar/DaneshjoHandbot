@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { assessPage, isDegenerateOcr, normalizeText } from "../src/rag/textQuality.js";
+import {
+  assessPage,
+  hasReversedLines,
+  isDegenerateOcr,
+  normalizeText,
+  reverseLineWords,
+} from "../src/rag/textQuality.js";
 
 describe("normalizeText", () => {
   it("turns tabs and repeated spaces into single spaces", () => {
@@ -39,6 +45,21 @@ describe("assessPage", () => {
     expect(assessPage(broken, 20)).toEqual({ ok: false, reason: "broken letters" });
   });
 
+  it("flags junk text layers (fonts mapped to digits and symbols)", () => {
+    const junk = '2    2     2    2   " 8 ( 9 : * \' = 0 ( 2 $ 2 2 2 '.repeat(3);
+
+    expect(assessPage(junk, 20)).toEqual({
+      ok: false,
+      reason: "junk text",
+    });
+  });
+
+  it("accepts code-heavy slides", () => {
+    const code = "مثال 1 : تابع فاکتوریل int fact (int n) { int f=1; for(i=1;i<=n;i++) f=f*i; return f; }";
+
+    expect(assessPage(code, 20)).toEqual({ ok: true });
+  });
+
   it("does not treat the word و as a broken letter", () => {
     expect(assessPage(Array(20).fill("و").join(" ") + " " + good, 20)).toEqual({ ok: true });
   });
@@ -55,5 +76,35 @@ describe("isDegenerateOcr", () => {
 
   it("accepts normal multi-line output", () => {
     expect(isDegenerateOcr("line one\nline two\nline three")).toBe(false);
+  });
+});
+
+describe("reversed word order", () => {
+  const reversed = [
+    ".آمدم دنیا به مذهبی نیمه خانواده یک در",
+    ".داشتم دوستان و خانواده با ناسازگاری سر",
+    "که بودم خیابانی در زدن قدم حال در روز یک",
+  ];
+  const normal = [
+    "در یک خانواده نیمه مذهبی به دنیا آمدم.",
+    "با خانواده و دوستان ناسازگاری داشتم.",
+    "روزی در خیابانی قدم می‌زدم که",
+  ];
+  const many = (lines: string[]) => [Array(5).fill(lines.join("\n")).join("\n")];
+
+  it("detects lines whose punctuation is at the start", () => {
+    expect(hasReversedLines(many(reversed))).toBe(true);
+  });
+
+  it("leaves normal Persian alone", () => {
+    expect(hasReversedLines(many(normal))).toBe(false);
+  });
+
+  it("needs enough lines to decide", () => {
+    expect(hasReversedLines([reversed.join("\n")])).toBe(false);
+  });
+
+  it("restores reading order and moves punctuation to the end", () => {
+    expect(reverseLineWords(reversed[0]!)).toBe(normal[0]);
   });
 });

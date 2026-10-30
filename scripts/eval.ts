@@ -40,6 +40,7 @@ interface EvalQuestion {
 interface Row {
   id: string;
   type: QuestionType;
+  filename: string;
   /** 1-based rank of the first chunk on an expected page; 0 = not in top `limit`. */
   rank: number;
   /** Distance of that chunk (positives) or of the best chunk (negatives). */
@@ -85,10 +86,27 @@ async function findDocument(filename: string) {
   return found.rows[0];
 }
 
-/** 1-based rank of the first chunk on an expected page, 0 if none. */
-function rankOf(pages: (number | null)[], expected: number[]): number {
-  return pages.findIndex((page) => page !== null && expected.includes(page)) + 1;
+interface PageSpan {
+  pageNumber: number | null;
+  pageEnd?: number | null;
 }
+
+/** True when a chunk's pages (it may cross a page break) include an expected page. */
+function covers(chunk: PageSpan, expected: number[]): boolean {
+  if (chunk.pageNumber === null) return false;
+  const end = chunk.pageEnd ?? chunk.pageNumber;
+  return expected.some((page) => page >= chunk.pageNumber! && page <= end);
+}
+
+/** 1-based rank of the first chunk on an expected page, 0 if none. */
+function rankOf(chunks: PageSpan[], expected: number[]): number {
+  return chunks.findIndex((chunk) => covers(chunk, expected)) + 1;
+}
+
+const span = (chunk: PageSpan) =>
+  chunk.pageEnd && chunk.pageEnd !== chunk.pageNumber
+    ? `${chunk.pageNumber}-${chunk.pageEnd}`
+    : String(chunk.pageNumber);
 
 const rows: Row[] = [];
 
@@ -110,12 +128,9 @@ for (const q of questions) {
   );
   const ms = performance.now() - start;
 
-  const pages = chunks.map((chunk) => chunk.pageNumber);
   const distances = chunks.map((chunk) => Number(chunk.distance));
-  const rank = rankOf(pages, q.expectedPages);
-  const wrongIndex = pages.findIndex(
-    (page) => page === null || !q.expectedPages.includes(page),
-  );
+  const rank = rankOf(chunks, q.expectedPages);
+  const wrongIndex = chunks.findIndex((chunk) => !covers(chunk, q.expectedPages));
 
   // Like production: follow-ups are rewritten before the context is built.
   const rewritten =
@@ -134,12 +149,13 @@ for (const q of questions) {
   const row: Row = {
     id: q.id,
     type: q.type,
+    filename: q.filename,
     rank,
     distance:
       q.type === "negative" ? (distances[0] ?? null) : rank > 0 ? distances[rank - 1]! : null,
     wrongDistance: wrongIndex >= 0 ? distances[wrongIndex]! : null,
-    inContext: rankOf(context.map((chunk) => chunk.pageNumber), q.expectedPages) > 0,
-    pages: pages.slice(0, 5).join(","),
+    inContext: rankOf(context, q.expectedPages) > 0,
+    pages: chunks.slice(0, 5).map(span).join(","),
     ms: Math.round(ms),
   };
 
@@ -152,10 +168,7 @@ for (const q of questions) {
       NO_THRESHOLD,
     );
     row.rewritten = rewritten;
-    row.rewriteRank = rankOf(
-      rewrittenChunks.map((chunk) => chunk.pageNumber),
-      q.expectedPages,
-    );
+    row.rewriteRank = rankOf(rewrittenChunks, q.expectedPages);
   }
 
   rows.push(row);
@@ -216,6 +229,11 @@ const types = [...new Set(positives.map((row) => row.type))];
 
 const byType: Record<string, Metrics> = { all: metrics(positives) };
 for (const type of types) byType[type] = metrics(positives.filter((r) => r.type === type));
+
+// Per document too: slide decks and plain-text notes behave differently.
+for (const filename of new Set(positives.map((row) => row.filename))) {
+  byType[`📄 ${filename.slice(0, 24)}`] = metrics(positives.filter((r) => r.filename === filename));
+}
 
 console.log("\nRetrieval (answerable questions):");
 console.table(

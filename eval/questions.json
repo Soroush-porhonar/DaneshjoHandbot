@@ -382,5 +382,232 @@
     "question": "زلزله کانتو در توکیو در سال ۱۹۲۳ چند قربانی داشت؟",
     "expectedPages": [],
     "filename": "زلزلهٔ لیسبون ۱۷۵۵.pdf"
+  },
+  {
+    "id": "sw-alpha-beta",
+    "type": "exact_term",
+    "mode": "focused",
+    "question": "فرق تست آلفا و تست بتا چیست؟",
+    "expectedPages": [95, 96, 97, 118, 191],
+    "mustInclude": ["مشتری"],
+    "filename": "جزوه درس آزمون نرم افزاراستاد زاغری 405.pdf"
+  },
+  {
+    "id": "sw-functional",
+    "type": "multi_page",
+    "mode": "focused",
+    "question": "تست کارکردی چه چیزی را بررسی می‌کند و چه تکنیک‌هایی برای آن به کار می‌رود؟",
+    "expectedPages": [118, 119],
+    "filename": "جزوه درس آزمون نرم افزاراستاد زاغری 405.pdf"
+  },
+  {
+    "id": "sw-error-guessing",
+    "type": "multi_page",
+    "mode": "focused",
+    "question": "حدس خطا چیست؟ چند مثال بزن",
+    "expectedPages": [123, 124],
+    "filename": "جزوه درس آزمون نرم افزاراستاد زاغری 405.pdf"
+  },
+  {
+    "id": "sw-checklist",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "استفاده از فهرست موارد بررسی در تست چه فایده‌ای دارد و چه ضعفی دارد؟",
+    "expectedPages": [124, 125],
+    "filename": "جزوه درس آزمون نرم افزاراستاد زاغری 405.pdf"
+  },
+  {
+    "id": "sw-decision-table",
+    "type": "exact_term",
+    "mode": "focused",
+    "question": "تست جدول تصمیم چیست؟",
+    "expectedPages": [130],
+    "filename": "جزوه درس آزمون نرم افزاراستاد زاغری 405.pdf"
+  },
+  {
+    "id": "sw-whitebox-basis",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "وقتی تستر داخل کد را می‌بیند، طراحی تست بر چه مبنایی انجام می‌شود؟",
+    "expectedPages": [132],
+    "filename": "جزوه درس آزمون نرم افزاراستاد زاغری 405.pdf"
+  },
+  {
+    "id": "sw-decision-coverage",
+    "type": "exact_term",
+    "mode": "focused",
+    "question": "پوشش تصمیم چطور محاسبه می‌شود؟",
+    "expectedPages": [133],
+    "filename": "جزوه درس آزمون نرم افزاراستاد زاغری 405.pdf"
+  },
+  {
+    "id": "sw-defect-tools",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "ابزارهای ثبت و پیگیری باگ چه کارهایی انجام می‌دهند؟",
+    "expectedPages": [136],
+    "filename": "جزوه درس آزمون نرم افزاراستاد زاغری 405.pdf"
+  },
+  {
+    "id": "sw-load-tools",
+    "type": "multi_page",
+    "mode": "focused",
+    "question": "ابزارهای تست کارایی و بار چه کاری می‌کنند؟ چند نمونه نام ببر",
+    "expectedPages": [141, 142],
+    "mustInclude": ["JMeter"],
+    "filename": "جزوه درس آزمون نرم افزاراستاد زاغری 405.pdf"
+  },
+  {
+    "id": "sw-inspection",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "رسمی‌ترین نوع بازبینی کدام است و چه نقش‌هایی در آن وجود دارد؟",
+    "expectedPages": [148],
+    "mustInclude": ["بازرسی"],
+    "filename": "جزوه درس آزمون نرم افزاراستاد زاغری 405.pdf"
+  },
+  {
+    "id": "sw-static-dynamic",
+    "type": "exact_term",
+    "mode": "focused",
+    "question": "تفاوت تست ایستا و تست پویا چیست؟",
+    "expectedPages": [150],
+    "filename": "جزوه درس آزمون نرم افزاراستاد زاغری 405.pdf"
+  },
+  {
+    "id": "sw-process-29119",
+    "type": "exact_term",
+    "mode": "focused",
+    "question": "مراحل فرایند تست طبق استاندارد 29119 چیست؟",
+    "expectedPages": [158],
+    "filename": "جزوه درس آزمون نرم افزاراستاد زاغری 405.pdf"
+  },
+  {
+    "id": "sw-retirement",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "وقتی یک سیستم از رده خارج می‌شود چه چیزهایی باید بررسی شود؟",
+    "expectedPages": [195, 196],
+    "filename": "جزوه درس آزمون نرم افزاراستاد زاغری 405.pdf"
+  },
+  {
+    "id": "sw-followup-error-guessing",
+    "type": "follow_up",
+    "mode": "focused",
+    "history": [
+      { "role": "user", "content": "حدس خطا در تست نرم افزار یعنی چی؟" },
+      { "role": "assistant", "content": "حدس خطا یعنی طراحی تست بر اساس تجربه تستر از خطاهای رایج." }
+    ],
+    "question": "چند تا مثالش رو بگو",
+    "expectedPages": [123, 124],
+    "filename": "جزوه درس آزمون نرم افزاراستاد زاغری 405.pdf"
+  },
+  {
+    "id": "sw-neg-mutation",
+    "type": "negative",
+    "mode": "focused",
+    "question": "تست جهشی (Mutation Testing) چگونه انجام می‌شود؟",
+    "expectedPages": [],
+    "filename": "جزوه درس آزمون نرم افزاراستاد زاغری 405.pdf"
+  },
+  {
+    "id": "oo-identity-state",
+    "type": "exact_term",
+    "mode": "focused",
+    "question": "هویت و حالت یک شیء یعنی چه؟",
+    "expectedPages": [23],
+    "filename": "جزوه مهندسی نرم افزار - بخش شی گرایی.pdf"
+  },
+  {
+    "id": "oo-class-uml",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "یک کلاس در نمودار UML چطور کشیده می‌شود؟",
+    "expectedPages": [30],
+    "filename": "جزوه مهندسی نرم افزار - بخش شی گرایی.pdf"
+  },
+  {
+    "id": "oo-message-passing",
+    "type": "exact_term",
+    "mode": "focused",
+    "question": "اشیاء چگونه با هم ارتباط برقرار می‌کنند؟",
+    "expectedPages": [35, 36],
+    "filename": "جزوه مهندسی نرم افزار - بخش شی گرایی.pdf"
+  },
+  {
+    "id": "oo-relations",
+    "type": "exact_term",
+    "mode": "focused",
+    "question": "روابط اساسی بین کلاس‌ها کدامند؟",
+    "expectedPages": [37],
+    "filename": "جزوه مهندسی نرم افزار - بخش شی گرایی.pdf"
+  },
+  {
+    "id": "oo-aggregation",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "رابطه‌ای که در آن یک کلاس از کنار هم گذاشتن چند کلاس دیگر ساخته می‌شود چه نام دارد؟",
+    "expectedPages": [40, 41],
+    "filename": "جزوه مهندسی نرم افزار - بخش شی گرایی.pdf"
+  },
+  {
+    "id": "oo-principles",
+    "type": "exact_term",
+    "mode": "focused",
+    "question": "اصول شی‌گرایی کدامند؟",
+    "expectedPages": [46],
+    "filename": "جزوه مهندسی نرم افزار - بخش شی گرایی.pdf"
+  },
+  {
+    "id": "oo-bank-example",
+    "type": "multi_page",
+    "mode": "multi_part",
+    "question": "مثال حساب بانکی چه مشکلی را نشان می‌دهد و محصورسازی چطور آن را حل می‌کند؟",
+    "expectedPages": [55, 56, 57, 58],
+    "filename": "جزوه مهندسی نرم افزار - بخش شی گرایی.pdf"
+  },
+  {
+    "id": "oo-cohesion-coupling",
+    "type": "exact_term",
+    "mode": "focused",
+    "question": "انسجام و وابستگی در واحدبندی یعنی چه؟",
+    "expectedPages": [63],
+    "filename": "جزوه مهندسی نرم افزار - بخش شی گرایی.pdf"
+  },
+  {
+    "id": "oo-open-closed",
+    "type": "exact_term",
+    "mode": "focused",
+    "question": "قاعده باز و بسته چیست؟",
+    "expectedPages": [69],
+    "filename": "جزوه مهندسی نرم افزار - بخش شی گرایی.pdf"
+  },
+  {
+    "id": "oo-structured-limits",
+    "type": "paraphrase",
+    "mode": "focused",
+    "question": "برنامه‌نویسی ساخت‌یافته چه محدودیت‌هایی داشت؟",
+    "expectedPages": [20],
+    "filename": "جزوه مهندسی نرم افزار - بخش شی گرایی.pdf"
+  },
+  {
+    "id": "oo-followup-abstraction",
+    "type": "follow_up",
+    "mode": "focused",
+    "history": [
+      { "role": "user", "content": "تجرید در شی گرایی یعنی چی؟" },
+      { "role": "assistant", "content": "تجرید یعنی تمرکز روی ویژگی‌ها و رفتارهای اصلی یک پدیده و نادیده گرفتن جزئیات غیرمهم." }
+    ],
+    "question": "انواعش کدومه؟",
+    "expectedPages": [51, 52],
+    "filename": "جزوه مهندسی نرم افزار - بخش شی گرایی.pdf"
+  },
+  {
+    "id": "oo-neg-singleton",
+    "type": "negative",
+    "mode": "focused",
+    "question": "الگوی طراحی Singleton چگونه پیاده‌سازی می‌شود؟",
+    "expectedPages": [],
+    "filename": "جزوه مهندسی نرم افزار - بخش شی گرایی.pdf"
   }
 ]

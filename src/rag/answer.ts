@@ -23,6 +23,7 @@ import type { RetrievalMode } from "./router.js";
 interface SourceChunk {
   filename: string;
   pageNumber: number | null;
+  pageEnd?: number | null;
   content: string;
   /** False for neighbour chunks, which are context but not cited. */
   isHit?: boolean;
@@ -53,8 +54,10 @@ export function formatChunks(chunks: SourceChunk[]): string {
   return chunks
     .map(
       (chunk) =>
-        `[فایل: ${chunk.filename}، صفحه PDF ${
-          chunk.pageNumber ?? "نامشخص"
+        `[فایل: ${chunk.filename}، صفحه PDF ${chunk.pageNumber ?? "نامشخص"}${
+          chunk.pageEnd && chunk.pageNumber && chunk.pageEnd > chunk.pageNumber
+            ? ` تا ${chunk.pageEnd}`
+            : ""
         }]\n${chunk.content}`,
     )
     .join("\n\n---\n\n");
@@ -65,7 +68,7 @@ export function buildSourceList(chunks: SourceChunk[]): string[] {
     ...new Set(
       chunks
         .filter((chunk) => chunk.pageNumber != null && chunk.isHit !== false)
-        .map((chunk) => sourceLineText(chunk.filename, chunk.pageNumber!)),
+        .map((chunk) => sourceLineText(chunk.filename, chunk.pageNumber!, chunk.pageEnd)),
     ),
   ];
 }

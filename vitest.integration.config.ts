@@ -16,6 +16,8 @@ export default defineConfig({
       LLM_MODEL: "test-model",
       EMBEDDING_MODEL: "test-embed",
       LOG_LEVEL: "error",
+      // Off by default in production; on here so the feature stays tested.
+      SECTION_EXPANSION: "true",
     },
   },
 });

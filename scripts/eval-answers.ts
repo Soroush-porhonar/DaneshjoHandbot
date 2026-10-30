@@ -67,7 +67,12 @@ function comparable(text: string): string {
 
 function citedPages(answer: string): number[] {
   const sources = answer.split(SOURCES_HEADING)[1] ?? "";
-  return [...sources.matchAll(/صفحه (\d+)/g)].map((match) => Number(match[1]));
+  // "صفحه 3" or a range "صفحه 3 تا 5" (a chunk crossing pages) -> every page in it.
+  return [...sources.matchAll(/صفحه (\d+)(?: تا (\d+))?/g)].flatMap((match) => {
+    const first = Number(match[1]);
+    const last = Number(match[2] ?? match[1]);
+    return Array.from({ length: last - first + 1 }, (_, i) => first + i);
+  });
 }
 
 function persianShare(text: string): number {

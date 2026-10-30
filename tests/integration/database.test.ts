@@ -183,6 +183,23 @@ describe("retrieval", () => {
     expect(context.map((chunk) => chunk.isHit)).toEqual([false, true, false]);
   });
 
+  it("adds the whole section of a slide hit (same title), within the cap", async () => {
+    const alice = await addUser("alice");
+    const documentId = await addDocument(alice, "slides.pdf", [5, 6, 1, 7, 8, 9]);
+    // Slides 1-4 share one title (section 0); 0 and 5 are other sections.
+    await pool.query(
+      `UPDATE document_chunks SET section_index =
+         CASE WHEN chunk_index BETWEEN 1 AND 4 THEN 0 ELSE chunk_index + 10 END
+       WHERE document_id = $1`,
+      [documentId],
+    );
+
+    const context = await retrieveContext(alice, "#1", "focused", documentId);
+
+    // Hit 2, its neighbours 1 and 3, and the rest of its section (4); not other sections.
+    expect(context.map((chunk) => chunk.chunkIndex)).toEqual([1, 2, 3, 4]);
+  });
+
   it("returns no context when nothing is close enough", async () => {
     const alice = await addUser("alice");
     const documentId = await addDocument(alice, "a.pdf", [5, 6]);
@@ -214,6 +231,15 @@ describe("ingestPdf", () => {
 
     const hits = await retrieveRelevantChunks(alice, "#2", 10);
     expect(hits.map((hit) => hit.pageNumber)).toEqual([2]);
+
+    const stored = await pool.query(
+      `SELECT page_number, page_end, section_title, section_index
+       FROM document_chunks ORDER BY chunk_index`,
+    );
+    expect(stored.rows).toEqual([
+      { page_number: 1, page_end: 1, section_title: page(1, "#1").text, section_index: 0 },
+      { page_number: 2, page_end: 2, section_title: page(2, "#2").text, section_index: 1 },
+    ]);
   });
 
   it("marks the document failed and stores nothing when embedding fails", async () => {
